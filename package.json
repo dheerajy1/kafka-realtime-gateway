@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "bunx tailwindcss -i ./src/tailwind.css -o ./public/global.css && bun --hot src/server.ts",
-    "build": "bunx tailwindcss -i ./src/tailwind.css -o ./public/global.css && tsc && tsc-alias",
-    "start": "bun dist/server.js",
-    "lint": "eslint . --cache --cache-location .eslintcache"
+    "build": "bun run clean && bunx tailwindcss -i ./src/tailwind.css -o ./public/global.css && tsc && tsc-alias && cp -r public dist/public",
+    "start": "NODE_ENV=production bun dist/server.js",
+    "lint": "eslint . --cache --cache-location .eslintcache",
+    "clean": "rm -rf dist/* dist/.* || true"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.1",

@@ -1,6 +1,7 @@
-import app from "@/index"
+import app from "@/index";
+import { isProd } from "@/lib/constants";
 
-const port = 8089;
+const port = isProd ? 8089 : 5000;
 
 app.listen(port, () => {
   console.log(`🚀 Kafka realtime gateway running on http://localhost:${port}`)

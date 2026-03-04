@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import path from "path";
 
 export const ALLOWED_ORIGINS = {
   fixed: [
@@ -24,3 +25,11 @@ export const jwtVal = {
     exp: "1d",
     iss: "kafka-realtime-gateway"
 }
+
+// Server environmnet
+export const isProd = process.env.NODE_ENV === "production";
+
+// Static assets folder path
+export const publicPath = isProd
+  ? path.join(process.cwd(), "dist", "public")
+  : path.join(process.cwd(), "public");

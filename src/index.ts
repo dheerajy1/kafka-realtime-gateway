@@ -1,4 +1,4 @@
-import { ALLOWED_ORIGINS } from "@/lib/constants";
+import { ALLOWED_ORIGINS, publicPath } from "@/lib/constants";
 import "@/lib/db";
 import { MyError, errors } from "@/lib/errors";
 import { startKafkaWsBridge } from "@/lib/kafka-ws-bridge";
@@ -135,8 +135,9 @@ app.use(
 // ===============================================
 
 app.use(staticPlugin({
-  assets: "public",
+  assets: publicPath,
   prefix: "/",
+  alwaysStatic: false,
 }));
 
 // ===============================================

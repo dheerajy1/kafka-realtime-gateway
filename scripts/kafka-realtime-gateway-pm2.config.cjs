@@ -1,7 +1,7 @@
 module.exports = {
     apps: [
         {
-            name: "kafka-realtime-gateway",
+            name: "kafka_realtime_gateway",
 
             script: "bun",
 
