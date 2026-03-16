@@ -1,13 +1,13 @@
 module.exports = {
     apps: [
         {
-            name: "kafka_realtime_gateway",
+            name: "kafkaApiGateway",
 
             script: "bun",
 
             args: ["run", "start"],
 
-            cwd: "/home/dev/Local-Disk-F/vs-code/kafka-realtime-gateway-proj/kafka-realtime-gateway",
+            cwd: "/home/dev/Local-Disk-F/vs-code/kafka-api-gateway",
 
             exec_mode: "fork",
             instances: 1,

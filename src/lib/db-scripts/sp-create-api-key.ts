@@ -1,11 +1,14 @@
-import sql from "mssql";
 import { getOnPremPool } from "@/lib/db";
+import sql from "mssql";
 
-type SpCreateApiKeyRow = {
-    Result: "SUCCESS";
-    ApiKeyId: string;
+type Notes = {
+    apiKeyId: string;
 };
 
+type SpOutput = {
+    result: "SUCCESS";
+    notes: string;
+};
 export async function spCreateApiKey({
     username,
     apiKeyId,
@@ -20,20 +23,22 @@ export async function spCreateApiKey({
     try {
         const result = await pool
             .request()
-            .input("Username", sql.VarChar(100), username)
-            .input("ApiKeyId", sql.VarChar(100), apiKeyId)
-            .input("ApiKeySecretHash", sql.VarChar(255), apiKeySecretHash)
-            .execute("dbo.SP_CreateApiKey");
+            .input("userName", sql.VarChar(100), username)
+            .input("apiKeyId", sql.VarChar(100), apiKeyId)
+            .input("apiKeySecretHash", sql.VarChar(255), apiKeySecretHash)
+            .execute("[dbo].[01spcreateApiKey]");
 
-        const row = result.recordset?.[0] as SpCreateApiKeyRow | undefined;
+        const row = result.recordset?.[0] as SpOutput;
 
-        if (!row || row.Result !== "SUCCESS") {
+        const notes = JSON.parse(row.notes) as Notes;
+
+        if (!row || row.result !== "SUCCESS") {
             throw new Error("SP did not return SUCCESS");
         }
 
         return {
             success: true,
-            data: row,
+            data: notes,
         };
     } catch (error: unknown) {
         const msg =

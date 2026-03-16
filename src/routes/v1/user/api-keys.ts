@@ -29,7 +29,7 @@ router.post(
 
         if (error || !success || !data) {
             // duplicate key or SP THROW bubbles up here
-            console.error(`/api/v1/api-keys`, error)
+            // console.error(`/api/v1/api-keys`, error)
             throw new MyError({
                 code: "CONFLICT",
                 message: errors.CONFLICT.DATABASE_CONFLICT.message,

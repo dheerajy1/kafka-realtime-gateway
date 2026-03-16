@@ -155,6 +155,10 @@ export default new Elysia()
 
       unregisterWs(sub.data.subscriberId);
 
+      if (wsClients.size === 0) {
+        subscriberCounter = 0;
+      }
+
       console.log(`${isoNowIST()}\t[WsSubscribe:Action]\tSUBSCRIBER DISCONNECTED ID: ${sub.data.subscriberId}`);
       console.log(`${isoNowIST()}\t[WsSubscribe:Log]\tSUBSCRIBER TOPICS:`, [...sub.data.subscriptions]);
       console.log(`${isoNowIST()}\t[WsSubscribe:Log]\tACTIVE WS CONNECTIONS: ${wsClients.size}`);

@@ -51,10 +51,10 @@ router.post("", async ({ request, body, cookie, status }) => {
             .request()
             .input("username", username)
             .query(`
-        SELECT PasswordHash
-        FROM tPortalUsersAuth01
-        WHERE username = @username;
-      `);
+                SELECT passwordHash
+                FROM [01tportalUsers]
+                WHERE userName = @username;
+            `);
 
         if (result.recordset.length === 0) {
             return status(401, {
@@ -64,9 +64,9 @@ router.post("", async ({ request, body, cookie, status }) => {
             });
         }
 
-        const { PasswordHash } = result.recordset[0];
+        const { passwordHash } = result.recordset[0];
 
-        const isValid = await Bun.password.verify(password, PasswordHash);
+        const isValid = await Bun.password.verify(password, passwordHash);
 
         if (!isValid) {
             return status(401, {

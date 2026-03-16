@@ -1,5 +1,5 @@
 {
-  "name": "kafka-realtime-gateway",
+  "name": "kafka-api-gateway",
   "version": "1.0.0",
   "private": true,
   "type": "module",

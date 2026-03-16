@@ -23,10 +23,10 @@ router.post(
             .request()
             .input("username", username)
             .query(`
-        SELECT Username, PasswordHash, UserRole
-        FROM tApiUsers02
-        WHERE username = @username
-      `);
+                SELECT userName, passwordHash, userRole
+                FROM [02tapiUsers]
+                WHERE userName = @username
+            `);
 
         if (result.recordset.length === 0) {
             throw new MyError({
@@ -36,8 +36,8 @@ router.post(
             });
         }
 
-        const { Username, PasswordHash, UserRole } = result.recordset[0];
-        const valid = await Bun.password.verify(password, PasswordHash);
+        const { userName, passwordHash, userRole } = result.recordset[0];
+        const valid = await Bun.password.verify(password, passwordHash);
 
         if (!valid) {
             throw new MyError({
@@ -48,8 +48,8 @@ router.post(
         }
 
         const token = await jwt.sign({
-            sub: Username,
-            role: UserRole,
+            sub: userName,
+            role: userRole,
         });
 
         if (!token) {
@@ -103,14 +103,6 @@ router.post(
             password: z.string().min(6)
         }),
         headers: NoAuthHeadersSchema,
-        // response: {
-        //     200: LoginResponseSchema,
-        //     ...errorResponses([
-        //         { code: 'UNAUTHORIZED', subKey: ['MISSING_AUTH_HEADERS', 'USER_NOT_FOUND', 'INVALID_CREDENTIALS'] },
-        //         { code: 'BAD_REQUEST', subKey: ['INVALID_HEADER_VALUES'] },
-        //         { code: 'INTERNAL_SERVER_ERROR', subKey: ['TOKEN_SIGNING_FAILED', 'TOKEN_VERIFICATION_FAILED'] }
-        //     ])
-        // },
         detail: {
             tags: ["Auth"],
             summary: "API user login",

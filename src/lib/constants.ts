@@ -23,7 +23,7 @@ export const jwtVal = {
     name: 'jwt',
     secret: env.JWT_SECRET,
     exp: "1d",
-    iss: "kafka-realtime-gateway"
+    iss: "kafka-api-gateway"
 }
 
 // Server environmnet

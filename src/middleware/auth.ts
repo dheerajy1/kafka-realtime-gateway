@@ -195,7 +195,7 @@ export const apiKeyAuth = new Elysia()
             // Verify secret hash (crypto stays in backend)
             const valid = await Bun.password.verify(
                 xApiSecret,
-                data.ApiKeySecretHash
+                data.apiKeySecretHash
             );
 
             if (!valid) {
@@ -211,7 +211,7 @@ export const apiKeyAuth = new Elysia()
                 ctx: {
                     headers: Object.assign({}, ctx.headers, parseResult.data),
                     xApiKey,
-                    apiUserId: data.IDApiUser,
+                    apiUserId: data.apiUserId,
                 },
 
             };

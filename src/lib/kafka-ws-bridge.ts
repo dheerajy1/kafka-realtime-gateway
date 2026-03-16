@@ -76,7 +76,7 @@ export async function commitByCorrelationId(correlationId: string) {
 
 export async function startKafkaWsBridge() {
   const consumer = kafka.consumer({
-    groupId: "kafka-realtime-gateway-ws",
+    groupId: "kafka-api-gateway-ws",
   });
 
   consumerRef = consumer;
