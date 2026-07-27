@@ -8,9 +8,10 @@ export async function getDbHealth(): Promise<
       return "connecting";
     }
 
-    const pool = await getOnPremPool({poolKey: "default"});
+    const pool = await getOnPremPool({ poolKey: "default" });
 
-    await pool.request().query("SELECT 1");
+    await pool.query("SELECT 1");
+
     return "connected";
   } catch {
     return "disconnected";

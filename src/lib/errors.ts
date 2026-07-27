@@ -364,6 +364,16 @@ export const errors = {
       message: "A database error occurred while processing the request.",
       error: "Database error",
     },
+
+    DB_PERMISSION_DENIED: {
+      message: "The server does not have permission to access required database resources.",
+      error: "Database permission denied",
+    },
+    DB_CONNECTION_ERROR: {
+      message: "Failed to connect to the database.",
+      error: "Database connection error",
+    },
+
     THIRD_PARTY_ERROR: {
       message: "An external service returned an unexpected error.",
       error: "Third-party service error",

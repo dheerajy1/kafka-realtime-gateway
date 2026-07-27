@@ -2,6 +2,7 @@ import { MyError, errors } from "@/lib/errors";
 import { kafka } from "@/lib/kafka.config";
 import { z } from 'zod';
 import { isoNowIST } from "@/lib/isoNowIST";
+import { env } from "@/lib/env";
 
 const KafkaMsgValSchema = z.object({
   correlationId: z.uuid(),           // or .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) if you want strict v4
@@ -76,7 +77,7 @@ export async function commitByCorrelationId(correlationId: string) {
 
 export async function startKafkaWsBridge() {
   const consumer = kafka.consumer({
-    groupId: "kafka-api-gateway-ws",
+    groupId: env.KAFKA_GROUP_ID,
   });
 
   consumerRef = consumer;

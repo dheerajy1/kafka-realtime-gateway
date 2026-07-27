@@ -1,8 +1,12 @@
 import { jwtVal } from "@/lib/constants";
-import { spVerifyApiKey } from "@/lib/db-scripts/sp-verify-api-key";
+import { fnVerifyApiKey } from "@/lib/db-scripts/fn-verify-api-key";
 import { env } from "@/lib/env";
 import { MyError, errors } from "@/lib/errors";
-import { AuthHeadersSchema, NoAuthHeadersSchema, apiKeyAuthHeadersSchema } from "@/types/auth";
+import {
+  AuthHeadersSchema,
+  NoAuthHeadersSchema,
+  apiKeyAuthHeadersSchema,
+} from "@/types/auth";
 import { jwt } from "@elysiajs/jwt";
 import { Elysia } from "elysia";
 
@@ -10,210 +14,232 @@ import { Elysia } from "elysia";
  * noAuth
  * ─ public procedures
  */
-export const NoAuth = new Elysia()
-    .macro({
-        noAuth: {
-            resolve({ headers }) {
-                // ----------------------------
-                // Missing headers → UNAUTHORIZED
-                // ----------------------------
-                if (
-                    headers["x-client-id"] == null ||
-                    headers["x-client-secret"] == null
-                ) {
-                    throw new MyError({
-                        code: "UNAUTHORIZED",
-                        message: errors.UNAUTHORIZED.MISSING_AUTH_HEADERS.message,
-                        error: errors.UNAUTHORIZED.MISSING_AUTH_HEADERS.error,
-                    });
-                }
+export const NoAuth = new Elysia().macro({
+  noAuth: {
+    resolve({ headers }) {
+      // ----------------------------
+      // Missing headers → UNAUTHORIZED
+      // ----------------------------
+      if (
+        headers["x-client-id"] == null ||
+        headers["x-client-secret"] == null
+      ) {
+        throw new MyError({
+          code: "UNAUTHORIZED",
+          message: errors.UNAUTHORIZED.MISSING_AUTH_HEADERS.message,
+          error: errors.UNAUTHORIZED.MISSING_AUTH_HEADERS.error,
+        });
+      }
 
-                // ----------------------------
-                // Present but invalid → BAD_REQUEST
-                // ----------------------------
-                const parseResult = NoAuthHeadersSchema.safeParse(headers);
+      // ----------------------------
+      // Present but invalid → BAD_REQUEST
+      // ----------------------------
+      const parseResult = NoAuthHeadersSchema.safeParse(headers);
 
-                if (!parseResult.success) {
-                    throw new MyError({
-                        code: "BAD_REQUEST",
-                        message: errors.BAD_REQUEST.INVALID_HEADER_VALUES.message,
-                        error: errors.BAD_REQUEST.INVALID_HEADER_VALUES.error,
-                    });
-                }
+      if (!parseResult.success) {
+        throw new MyError({
+          code: "BAD_REQUEST",
+          message: errors.BAD_REQUEST.INVALID_HEADER_VALUES.message,
+          error: errors.BAD_REQUEST.INVALID_HEADER_VALUES.error,
+        });
+      }
 
-                const parsed = parseResult.data;
+      const parsed = parseResult.data;
 
-                const valid = parsed["x-client-id"] === env.CLIENT_ID && parsed["x-client-secret"] === env.CLIENT_SECRET;
+      const valid =
+        parsed["x-client-id"] === env.CLIENT_ID &&
+        parsed["x-client-secret"] === env.CLIENT_SECRET;
 
-                if (!valid) {
-                    throw new MyError({
-                        code: "BAD_REQUEST",
-                        message: errors.BAD_REQUEST.INVALID_HEADER_VALUES.message,
-                        error: errors.BAD_REQUEST.INVALID_HEADER_VALUES.error,
-                    });
-                }
+      if (!valid) {
+        throw new MyError({
+          code: "BAD_REQUEST",
+          message: errors.BAD_REQUEST.INVALID_HEADER_VALUES.message,
+          error: errors.BAD_REQUEST.INVALID_HEADER_VALUES.error,
+        });
+      }
 
-                return {
-                    ctx: {
-                        headers: Object.assign({}, headers, parseResult.data),
-                    }
-                };
-            }
-        }
-    });
+      return {
+        ctx: {
+          headers: Object.assign({}, headers, parseResult.data),
+        },
+      };
+    },
+  },
+});
 
 /**
  * auth
  * ─ JWT protected procedures
  * ─ attaches `apiUser` to context
  */
-export const Auth = new Elysia()
-    .use(jwt(jwtVal))
-    .macro({
-        Auth: {
-            async resolve({ headers, jwt }) {
+export const Auth = new Elysia().use(jwt(jwtVal)).macro({
+  Auth: {
+    async resolve({ headers, jwt }) {
+      // ----------------------------
+      // Missing headers → UNAUTHORIZED
+      // ----------------------------
+      if (
+        headers["x-client-id"] == null ||
+        headers["x-client-secret"] == null
+      ) {
+        throw new MyError({
+          code: "UNAUTHORIZED",
+          message: errors.UNAUTHORIZED.MISSING_AUTH_HEADERS.message,
+          error: errors.UNAUTHORIZED.MISSING_AUTH_HEADERS.error,
+        });
+      }
 
-                // ----------------------------
-                // Missing headers → UNAUTHORIZED
-                // ----------------------------
-                if (
-                    headers["x-client-id"] == null ||
-                    headers["x-client-secret"] == null
-                ) {
-                    throw new MyError({
-                        code: "UNAUTHORIZED",
-                        message: errors.UNAUTHORIZED.MISSING_AUTH_HEADERS.message,
-                        error: errors.UNAUTHORIZED.MISSING_AUTH_HEADERS.error,
-                    });
-                }
+      // ----------------------------
+      // Present but invalid → BAD_REQUEST
+      // ----------------------------
+      const parseResult = AuthHeadersSchema.safeParse(headers);
 
-                // ----------------------------
-                // Present but invalid → BAD_REQUEST
-                // ----------------------------
-                const parseResult = AuthHeadersSchema.safeParse(headers);
+      if (!parseResult.success) {
+        throw new MyError({
+          code: "BAD_REQUEST",
+          message: errors.BAD_REQUEST.INVALID_HEADER_VALUES.message,
+          error: errors.BAD_REQUEST.INVALID_HEADER_VALUES.error,
+        });
+      }
+      // ----------------------------
+      // Invalid Bearer format → UNAUTHORIZED
+      // ----------------------------
+      const { authorization } = parseResult.data;
 
-                if (!parseResult.success) {
-                    throw new MyError({
-                        code: "BAD_REQUEST",
-                        message: errors.BAD_REQUEST.INVALID_HEADER_VALUES.message,
-                        error: errors.BAD_REQUEST.INVALID_HEADER_VALUES.error,
-                    });
-                }
-                // ----------------------------
-                // Invalid Bearer format → UNAUTHORIZED
-                // ----------------------------
-                const { authorization } = parseResult.data;
+      if (!authorization?.startsWith("Bearer ")) {
+        throw new MyError({
+          code: "UNAUTHORIZED",
+          message: errors.UNAUTHORIZED.MISSING_AUTHORIZATION_TOKEN.message,
+          error: errors.UNAUTHORIZED.MISSING_AUTHORIZATION_TOKEN.error,
+        });
+      }
 
-                if (!authorization?.startsWith("Bearer ")) {
-                    throw new MyError({
-                        code: "UNAUTHORIZED",
-                        message: errors.UNAUTHORIZED.MISSING_AUTHORIZATION_TOKEN.message,
-                        error: errors.UNAUTHORIZED.MISSING_AUTHORIZATION_TOKEN.error
-                    });
-                }
+      const token = authorization.slice("Bearer ".length).trim();
+      const payload = await jwt.verify(token);
 
-                const token = authorization.slice("Bearer ".length).trim();
-                const payload = await jwt.verify(token);
+      if (!payload) {
+        throw new MyError({
+          code: "UNAUTHORIZED",
+          message: errors.UNAUTHORIZED.INVALID_TOKEN.message,
+          error: errors.UNAUTHORIZED.INVALID_TOKEN.error,
+        });
+      }
 
-                if (!payload) {
-                    throw new MyError({
-                        code: "UNAUTHORIZED",
-                        message: errors.UNAUTHORIZED.INVALID_TOKEN.message,
-                        error: errors.UNAUTHORIZED.INVALID_TOKEN.error
-                    });
-                }
+      const { sub, role } = payload;
 
-                const { sub, role } = payload
+      if (!sub || !role) {
+        throw new MyError({
+          code: "UNAUTHORIZED",
+          message: errors.UNAUTHORIZED.MISSING_SUB_OR_ROLE.message,
+          error: errors.UNAUTHORIZED.MISSING_SUB_OR_ROLE.error,
+        });
+      }
 
-                if (!sub || !role) {
-                    throw new MyError({
-                        code: "UNAUTHORIZED",
-                        message: errors.UNAUTHORIZED.MISSING_SUB_OR_ROLE.message,
-                        error: errors.UNAUTHORIZED.MISSING_SUB_OR_ROLE.error
-                    });
-                }
-
-                return {
-                    ctx: {
-                        headers: { headers, ...parseResult.data },
-                        username: sub,
-                        role: role
-                    }
-                };
-            }
-        }
-    });
-
+      return {
+        ctx: {
+          headers: { headers, ...parseResult.data },
+          username: sub,
+          role: role,
+        },
+      };
+    },
+  },
+});
 
 // This runs when you write .guard({ apiKey: true }) or .post(..., { apiKey: true })
+export const apiKeyAuth = new Elysia().use(NoAuth).macro("apiKey", {
+  noAuth: true,
+  resolve: async ({ ctx }) => {
+    try {
+      const { headers } = ctx;
 
-export const apiKeyAuth = new Elysia()
-    .use(NoAuth)
-    .macro("apiKey", {
-        noAuth: true,
-        resolve: async ({ ctx }) => {
+      if (headers["x-api-key"] == null || headers["x-api-secret"] == null) {
+        throw new MyError({
+          code: "UNAUTHORIZED",
+          message: errors.UNAUTHORIZED.MISSING_API_KEY.message,
+          error: errors.UNAUTHORIZED.MISSING_API_KEY.error,
+        });
+      }
 
-            const { headers } = ctx;
+      // ----------------------------
+      // Present but invalid → BAD_REQUEST
+      // ----------------------------
+      const parseResult = apiKeyAuthHeadersSchema.safeParse(headers);
 
-            if (headers["x-api-key"] == null ||
-                headers["x-api-secret"] == null) {
-                throw new MyError({
-                    code: "UNAUTHORIZED",
-                    message: errors.UNAUTHORIZED.MISSING_API_KEY.message,
-                    error: errors.UNAUTHORIZED.MISSING_API_KEY.error,
-                });
-            }
+      if (!parseResult.success) {
+        throw new MyError({
+          code: "BAD_REQUEST",
+          message: errors.BAD_REQUEST.INVALID_HEADER_VALUES.message,
+          error: errors.BAD_REQUEST.INVALID_HEADER_VALUES.error,
+        });
+      }
 
-            // ----------------------------
-            // Present but invalid → BAD_REQUEST
-            // ----------------------------
-            const parseResult = apiKeyAuthHeadersSchema.safeParse(headers);
+      const { "x-api-key": xApiKey, "x-api-secret": xApiSecret } =
+        parseResult.data;
 
-            if (!parseResult.success) {
-                throw new MyError({
-                    code: "BAD_REQUEST",
-                    message: errors.BAD_REQUEST.INVALID_HEADER_VALUES.message,
-                    error: errors.BAD_REQUEST.INVALID_HEADER_VALUES.error,
-                });
-            }
+      // Resolve + validate API key metadata via SP
+      const { success, data } = await fnVerifyApiKey({
+        xApiKey,
+      });
 
-            const { "x-api-key": xApiKey, "x-api-secret": xApiSecret } = parseResult.data;
+      if (!success || !data) {
+        throw new MyError({
+          code: "UNAUTHORIZED",
+          message: errors.UNAUTHORIZED.INVALID_API_KEY.message,
+          error: errors.UNAUTHORIZED.INVALID_API_KEY.error,
+        });
+      }
 
-            // Resolve + validate API key metadata via SP
-            const { success, data, error } = await spVerifyApiKey({
-                xApiKey,
+      // Verify secret hash (crypto stays in backend)
+      const valid = await Bun.password.verify(
+        xApiSecret,
+        data.apiKeySecretHash,
+      );
+
+      if (!valid) {
+        throw new MyError({
+          code: "UNAUTHORIZED",
+          message: errors.UNAUTHORIZED.INVALID_API_KEY.message,
+          error: errors.UNAUTHORIZED.INVALID_API_KEY.error,
+        });
+      }
+
+      // Attach context
+      return {
+        ctx: {
+          headers: Object.assign({}, ctx.headers, parseResult.data),
+          xApiKey,
+          apiUserId: data.apiUserId,
+          authError: {
+            code: null,
+            httpCode: null,
+            message: null,
+            error: null,
+          },
+        },
+      };
+    } catch (err: unknown) {
+      const myErr =
+        err instanceof MyError
+          ? err
+          : new MyError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: errors.INTERNAL_SERVER_ERROR.SERVER_ERROR.message,
+              error: errors.INTERNAL_SERVER_ERROR.SERVER_ERROR.error,
             });
 
-            if (error || !success || !data) {
-                throw new MyError({
-                    code: "UNAUTHORIZED",
-                    message: errors.UNAUTHORIZED.INVALID_API_KEY.message,
-                    error: errors.UNAUTHORIZED.INVALID_API_KEY.error,
-                });
-            }
-
-            // Verify secret hash (crypto stays in backend)
-            const valid = await Bun.password.verify(
-                xApiSecret,
-                data.apiKeySecretHash
-            );
-
-            if (!valid) {
-                throw new MyError({
-                    code: "UNAUTHORIZED",
-                    message: errors.UNAUTHORIZED.INVALID_API_KEY.message,
-                    error: errors.UNAUTHORIZED.INVALID_API_KEY.error,
-                });
-            }
-
-            // Attach context
-            return {
-                ctx: {
-                    headers: Object.assign({}, ctx.headers, parseResult.data),
-                    xApiKey,
-                    apiUserId: data.apiUserId,
-                },
-
-            };
-        }
-    });
+      return {
+        ctx: {
+          xApiKey: "",
+          apiUserId: -1,
+          authError: {
+            code: myErr.code,
+            httpCode: myErr.httpCode,
+            message: myErr.message,
+            error: myErr.error,
+          },
+        },
+      };
+    }
+  },
+});
