@@ -11,10 +11,10 @@ export function Login({ title }: Props): React.ReactElement {
         <div className="w-full max-w-(--width-login-sm) md:max-w-(--width-login) bg-surface border border-border-thick p-8 md:p-12">
           <header className="text-center mb-6 md:mb-8">
             <div className="inline-flex items-center justify-center px-3 py-2 border border-logo-border bg-logo-bg text-logo-text font-bold text-2xl md:text-3xl mb-4">
-              Record log api
+              Kafka realtime gateway api
             </div>
             <h2 className="text-xl md:text-2xl font-medium uppercase tracking-(--tracking-wider) text-text-primary">
-              Record log Login
+              Kafka realtime gateway Login
             </h2>
           </header>
 

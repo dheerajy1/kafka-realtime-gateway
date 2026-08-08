@@ -1,0 +1,25 @@
+services:
+  kafka-api-gateway:
+    container_name: kafka-api-gateway
+
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+
+    image: kafka-api-gateway:latest
+
+    restart: unless-stopped
+
+    env_file:
+      - ../.env.production
+
+    environment:
+      NODE_ENV: production
+
+    ports:
+      - "8089:8089"
+
+    network_mode: bridge
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

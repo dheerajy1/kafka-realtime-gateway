@@ -1,0 +1,95 @@
+~/dev/vs-code/kafka-api-gateway
+
+./
+├── .env.development
+├── .env.production
+├── .eslintcache
+├── .github/
+│   ├── CODEOWNERS
+│   ├── labeler.yml
+│   ├── pull_request_template.md
+│   └── workflows/
+│       ├── pr-check-template.yml
+│       ├── pr-checks.yml
+│       ├── release.yml
+│       └── test.yml
+├── .gitignore
+├── .vscode/
+│   └── settings.json
+├── CHANGELOG.md
+├── LICENSE
+├── README.md
+├── bun.lock
+├── docker/
+│   ├── Dockerfile
+│   └── docker-compose.yml
+├── eslint.config.js
+├── package.json
+├── public/
+│   ├── favicon.ico
+│   ├── global.css
+│   └── logo.png
+├── release.config.js
+├── scripts/
+│   └── kafka-api-gateway-pm2.config.cjs
+├── src/
+│   ├── components/
+│   │   ├── About.tsx
+│   │   ├── Healthz.tsx
+│   │   ├── Home.tsx
+│   │   ├── Layout.tsx
+│   │   └── Login.tsx
+│   ├── index.ts
+│   ├── lib/
+│   │   ├── constants.ts
+│   │   ├── db-scripts/
+│   │   │   ├── fn-create-api-key.ts
+│   │   │   ├── fn-verify-api-key.ts
+│   │   │   └── get-db-health.ts
+│   │   ├── db.ts
+│   │   ├── env.ts
+│   │   ├── errors.ts
+│   │   ├── get-file-path.ts
+│   │   ├── isoNowIST.ts
+│   │   ├── kafka-ws-bridge.ts
+│   │   ├── kafka.config.ts
+│   │   └── producer.kafka.ts
+│   ├── middleware/
+│   │   ├── auth.ts
+│   │   └── server-gate.ts
+│   ├── routes/
+│   │   ├── about.ts
+│   │   ├── healthz.ts
+│   │   ├── home.ts
+│   │   ├── login.ts
+│   │   └── v1/
+│   │       ├── auth/
+│   │       │   └── login.ts
+│   │       ├── auth.router.ts
+│   │       ├── kafka/
+│   │       │   ├── http-publish.ts
+│   │       │   ├── ws-publish.ts
+│   │       │   └── ws-subscribe.ts
+│   │       ├── kafka.router.ts
+│   │       ├── user/
+│   │       │   └── api-keys.ts
+│   │       ├── user.router.ts
+│   │       └── v1.router.ts
+│   ├── schemas/
+│   │   └── login.ts
+│   ├── server.ts
+│   ├── tailwind.css
+│   └── types/
+│       ├── api.ts
+│       ├── auth.ts
+│       └── env.ts
+├── structure.txt
+├── tests/
+│   ├── ws-test.ts
+│   ├── ws-test2.ts
+│   ├── ws-test3.ts
+│   ├── ws-test4.ts
+│   └── ws-test5.ts
+└── tsconfig.json
+
+20 directories, 71 files

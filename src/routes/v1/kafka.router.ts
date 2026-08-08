@@ -4,9 +4,6 @@ import wsSubscribe from "@/routes/v1/kafka/ws-subscribe";
 
 import { Elysia } from "elysia";
 
-const router = new Elysia()
-    .use(httpPublish)
-    .use(wsPublish)
-    .use(wsSubscribe);
+const router = new Elysia().use(httpPublish).use(wsPublish).use(wsSubscribe);
 
 export default router;

@@ -8,105 +8,113 @@ import z from "zod";
 
 const router = new Elysia({ prefix: "/login" });
 
-router.get("", async () => {
-
-    const html = React.createElement(Login, { title: `Login | Kafka realtime gateway` });
+router.get(
+  "",
+  async () => {
+    const html = React.createElement(Login, {
+      title: `Login | Kafka realtime gateway`,
+    });
 
     const stream = await renderToReadableStream(html);
 
     return new Response(stream, {
-        headers: { "Content-Type": "text/html" }
+      headers: { "Content-Type": "text/html" },
     });
-},
-    {
-        detail: {
-            tags: ["portal-paths"]
-        }
-    }
+  },
+  {
+    detail: {
+      tags: ["portal-paths"],
+    },
+  },
 );
 
-router.post("", async ({ request, body, cookie, status }) => {
+router.post(
+  "",
+  async ({ request, body, cookie, status }) => {
     // browser-only POST (FORM submit)
     const accept = request.headers.get("accept") ?? "";
     if (!accept.includes("text/html")) {
-        return status(403, { message: "Forbidden" });
+      return status(403, { message: "Forbidden" });
     }
 
     const parsed = loginSchema.safeParse(body);
 
     if (!parsed.success) {
-        return status(400, {
-            success: false,
-            statusCode: 400,
-            message: "Invalid request payload"
-        });
+      return status(400, {
+        success: false,
+        statusCode: 400,
+        message: "Invalid request payload",
+      });
     }
 
     const { username, password } = parsed.data;
 
     try {
-        const pool = await getOnPremPool({ poolKey: "default" });
+      const pool = await getOnPremPool({ poolKey: "default" });
 
-        const result = await pool
-            .request()
-            .input("username", username)
-            .query(`
-        SELECT PasswordHash
-        FROM tPortalUsersAuth01
-        WHERE username = @username;
-      `);
+      const { rows } = await pool.query<{
+        password_hash: string;
+      }>(
+        `
+        SELECT password_hash
+        FROM portal_users
+        WHERE user_name = $1
+        `,
+        [username],
+      );
 
-        if (result.recordset.length === 0) {
-            return status(401, {
-                success: false,
-                statusCode: 401,
-                message: "Invalid credentials"
-            });
-        }
-
-        const { PasswordHash } = result.recordset[0];
-
-        const isValid = await Bun.password.verify(password, PasswordHash);
-
-        if (!isValid) {
-            return status(401, {
-                success: false,
-                statusCode: 401,
-                message: "Invalid credentials"
-            });
-        }
-
-        cookie.auth.set({
-            value: "ok",
-            httpOnly: true,
-            sameSite: "strict",
-            maxAge: 60 * 60 * 24,
-            secure: process.env.NODE_ENV === "production"
+      if (rows.length === 0) {
+        return status(401, {
+          success: false,
+          statusCode: 401,
+          message: "Invalid credentials",
         });
+      }
 
-        return new Response(null, {
-            status: 302,
-            headers: {
-                Location: "/"
-            }
+      const { password_hash: passwordHash } = rows[0];
+
+      const isValid = await Bun.password.verify(password, passwordHash);
+
+      if (!isValid) {
+        return status(401, {
+          success: false,
+          statusCode: 401,
+          message: "Invalid credentials",
         });
+      }
 
+      cookie.auth.set({
+        value: "ok",
+        httpOnly: true,
+        sameSite: "strict",
+        maxAge: 60 * 60 * 24,
+        secure: process.env.NODE_ENV === "production",
+      });
+
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: "/",
+        },
+      });
     } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Server error";
-        return status(500, {
-            success: false,
-            statusCode: 500,
-            message: msg
-        });
+      const msg = err instanceof Error ? err.message : "Server error";
+      return status(500, {
+        success: false,
+        statusCode: 500,
+        message: msg,
+      });
     }
-}, {
+  },
+  {
     body: z.object({
-        username: z.string(),
-        password: z.string().min(6),
+      username: z.string(),
+      password: z.string().min(6),
     }),
     detail: {
-        tags: ["portal-paths"]
-    }
-});
+      tags: ["portal-paths"],
+    },
+  },
+);
 
 export default router;

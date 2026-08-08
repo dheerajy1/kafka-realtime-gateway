@@ -1,4 +1,4 @@
-import { spCreateApiKey } from "@/lib/db-scripts/sp-create-api-key";
+import { fnCreateApiKey } from "@/lib/db-scripts/fn-create-api-key";
 import { MyError, errors } from "@/lib/errors";
 import { Auth } from "@/middleware/auth";
 import crypto from "crypto";
@@ -21,7 +21,7 @@ router.post(
         const apiKeySecretHash = await Bun.password.hash(apiKeySecret);
 
         // call SP (DB owns logic)
-        const { success, data, error } = await spCreateApiKey({
+        const { success, data, error } = await fnCreateApiKey({
             username,
             apiKeyId,
             apiKeySecretHash,
@@ -29,7 +29,7 @@ router.post(
 
         if (error || !success || !data) {
             // duplicate key or SP THROW bubbles up here
-            console.error(`/api/v1/api-keys`, error)
+            // console.error(`/api/v1/api-keys`, error)
             throw new MyError({
                 code: "CONFLICT",
                 message: errors.CONFLICT.DATABASE_CONFLICT.message,

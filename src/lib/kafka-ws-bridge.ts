@@ -1,6 +1,8 @@
 import { MyError, errors } from "@/lib/errors";
 import { kafka } from "@/lib/kafka.config";
 import { z } from 'zod';
+import { isoNowIST } from "@/lib/isoNowIST";
+import { env } from "@/lib/env";
 
 const KafkaMsgValSchema = z.object({
   correlationId: z.uuid(),           // or .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) if you want strict v4
@@ -24,7 +26,7 @@ export interface GatewayWS {
 /**
  * WS clients
  */
-const wsClients = new Set<GatewayWS>();
+export const wsClients = new Map<number, GatewayWS>();
 
 /**
  * correlationId → offset info
@@ -36,20 +38,27 @@ const pendingOffsets = new Map<
 
 let consumerRef: ReturnType<typeof kafka.consumer> | null = null;
 
-export function registerWs(ws: GatewayWS) {
-  wsClients.add(ws);
+export function registerWs(id: number, ws: GatewayWS) {
+  wsClients.set(id, ws);
 }
 
-export function unregisterWs(ws: GatewayWS) {
-  wsClients.delete(ws);
+export function unregisterWs(id: number) {
+  wsClients.delete(id);
 }
 
 /**
  * Called from ws-subscribe when client ACKs
  */
 export async function commitByCorrelationId(correlationId: string) {
+
   const info = pendingOffsets.get(correlationId);
-  if (!info || !consumerRef) return;
+
+  if (!info || !consumerRef) {
+    console.log(
+      `${isoNowIST()}\t[WsBridge:Error]\tACK FAILED corr=${correlationId} offset not found`
+    );
+    return;
+  }
 
   await consumerRef.commitOffsets([
     {
@@ -59,12 +68,16 @@ export async function commitByCorrelationId(correlationId: string) {
     },
   ]);
 
+  console.log(
+    `${isoNowIST()}\t[WsBridge:Action]\tSubscriber ACK → Kafka Commit | topic=${info.topic} corr=${correlationId} partition=${info.partition} offset=${info.offset}`
+  );
+
   pendingOffsets.delete(correlationId);
 }
 
 export async function startKafkaWsBridge() {
   const consumer = kafka.consumer({
-    groupId: "kafka-realtime-gateway-ws",
+    groupId: env.KAFKA_GROUP_ID,
   });
 
   consumerRef = consumer;
@@ -99,7 +112,11 @@ export async function startKafkaWsBridge() {
         offset: message.offset,
       });
 
-      for (const ws of wsClients) {
+      // fan-out section
+      
+      let delivered = 0;
+
+      for (const ws of wsClients.values()) {
         if (!ws.data.subscriptions.has(topic)) continue;
 
         ws.send(
@@ -109,7 +126,20 @@ export async function startKafkaWsBridge() {
             ...result.data,
           })
         );
+
+        delivered++;
       }
+
+      if (delivered === 0) {
+        console.log(
+          `${isoNowIST()}\t[WsBridge:Log]\tDROP topic=${topic} corr=${correlationId} reason=no-subscribers`
+        );
+      } else {
+        console.log(
+          `${isoNowIST()}\t[WsBridge:Log]\tKafka → Gateway → Subscribers | topic=${topic} corr=${correlationId} delivered=${delivered}`
+        );
+      }
+
     },
   });
 }

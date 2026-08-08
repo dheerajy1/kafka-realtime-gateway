@@ -1,7 +1,7 @@
 import { Layout } from "@/components/Layout";
 import React from "react";
 
-type Props = { title: string; bunVersion: string; };
+type Props = { title: string; bunVersion: string };
 
 export function Home({ title, bunVersion }: Props): React.ReactElement {
   return (
@@ -27,11 +27,13 @@ export function Home({ title, bunVersion }: Props): React.ReactElement {
 
         <section className="flex flex-col gap-4 bg-surface border border-border rounded-lg p-4 md:p-8 mt-8">
           <h1 className="text-3xl font-bold text-text-primary">
-             Welcome to Kafka realtime gateway, Elysia + Bun {bunVersion} on Vercel 🚀
+            Welcome to Kafka realtime gateway, Elysia + Bun {bunVersion} on
+            Vercel 🚀
           </h1>
           <p className="text-base leading-relaxed text-text">
             Complete foundational structure, type safety layer, deployment
-            readiness, and basic login authentication for the recordlog-api backend.
+            readiness, and basic login authentication for the Kafka realtime
+            gateway api backend.
           </p>
           <img
             src="/logo.png"

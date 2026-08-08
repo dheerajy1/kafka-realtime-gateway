@@ -1,7 +1,8 @@
+import { env } from "@/lib/env";
 import { Kafka } from "kafkajs";
 
 export const kafka = new Kafka({
-  clientId: "kafka-realtime-gateway",
-  brokers: ["yoga-node:9092"],
+  clientId: "kafka-api-gateway",
+  brokers: [env.KAFKA_BROKERS],
    requestTimeout: 30000,
 });

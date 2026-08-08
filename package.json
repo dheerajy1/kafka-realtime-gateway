@@ -1,13 +1,24 @@
 {
-  "name": "kafka-realtime-gateway",
+  "name": "kafka-api-gateway",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bunx tailwindcss -i ./src/tailwind.css -o ./public/global.css && bun --hot src/server.ts",
-    "build": "bunx tailwindcss -i ./src/tailwind.css -o ./public/global.css && tsc && tsc-alias",
-    "start": "bun dist/server.js",
-    "lint": "eslint . --cache --cache-location .eslintcache"
+    "dev": "bunx tailwindcss -i ./src/tailwind.css -o ./public/global.css && bun --env-file=.env.development --hot src/server.ts",
+    "build": "bun run clean && bunx tailwindcss -i ./src/tailwind.css -o ./public/global.css && tsc && tsc-alias && cp -r public dist/public",
+    "start": "bun --env-file=.env.production dist/server.js",
+    "lint": "eslint . --cache --cache-location .eslintcache",
+    "clean": "rm -rf dist/* dist/.* || true",
+    "docker:build": "docker compose -f docker/docker-compose.yml build",
+    "docker:up": "docker compose -f docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f docker/docker-compose.yml down",
+    "docker:start": "docker compose -f docker/docker-compose.yml start",
+    "docker:stop": "docker compose -f docker/docker-compose.yml stop",
+    "docker:restart": "docker compose -f docker/docker-compose.yml restart",
+    "docker:logs": "docker compose -f docker/docker-compose.yml logs -f kafka-api-gateway",
+    "docker:logs:clear": "sudo truncate -s 0 $(docker inspect --format='{{.LogPath}}' kafka-api-gateway)",
+    "docker:rmi": "docker image rm kafka-api-gateway:latest",
+    "docker:clean": "docker compose -f docker/docker-compose.yml down && docker image rm -f kafka-api-gateway:latest"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.1",
@@ -17,7 +28,7 @@
     "elysia": "^1.4.22",
     "kafkajs": "^2.2.4",
     "lucide-react": "^0.563.0",
-    "mssql": "^12.2.0",
+    "pg": "^8.22.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "zod": "^4.3.6"
@@ -31,7 +42,7 @@
     "@semantic-release/release-notes-generator": "^14.1.0",
     "@tailwindcss/cli": "^4.1.18",
     "@types/bun": "^1.3.6",
-    "@types/mssql": "^9.1.9",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19.2.9",
     "@types/react-dom": "^19.2.3",
     "@typescript-eslint/eslint-plugin": "^8.54.0",
