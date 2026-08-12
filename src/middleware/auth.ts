@@ -4,6 +4,7 @@ import { env } from "@/lib/env";
 import { MyError, errors } from "@/lib/errors";
 import {
   AuthHeadersSchema,
+  CtxAuthError,
   NoAuthHeadersSchema,
   apiKeyAuthHeadersSchema,
 } from "@/types/auth";
@@ -204,18 +205,20 @@ export const apiKeyAuth = new Elysia().use(NoAuth).macro("apiKey", {
         });
       }
 
+      const authError: CtxAuthError = {
+        code: null,
+        httpCode: null,
+        message: null,
+        error: null,
+      };
+
       // Attach context
       return {
         ctx: {
           headers: Object.assign({}, ctx.headers, parseResult.data),
           xApiKey,
           apiUserId: data.apiUserId,
-          authError: {
-            code: null,
-            httpCode: null,
-            message: null,
-            error: null,
-          },
+          authError,
         },
       };
     } catch (err: unknown) {
@@ -228,16 +231,19 @@ export const apiKeyAuth = new Elysia().use(NoAuth).macro("apiKey", {
               error: errors.INTERNAL_SERVER_ERROR.SERVER_ERROR.error,
             });
 
+      const authError: CtxAuthError = {
+        code: myErr.code,
+        httpCode: myErr.httpCode,
+        message: myErr.message,
+        error: myErr.error,
+      };
+
       return {
         ctx: {
+          headers: ctx.headers,
           xApiKey: "",
           apiUserId: -1,
-          authError: {
-            code: myErr.code,
-            httpCode: myErr.httpCode,
-            message: myErr.message,
-            error: myErr.error,
-          },
+          authError,
         },
       };
     }

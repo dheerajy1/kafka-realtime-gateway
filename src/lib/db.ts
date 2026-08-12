@@ -26,6 +26,12 @@ const predefinedConfigs = {
         user: env.ONPREM_DB_USER_SERVICE,
         password: env.ONPREM_DB_PASSWORD_SERVICE,
     },
+    pipelineStateConsumerDb: {
+        ...baseConfig,
+        database: env.PIPELINE_STATE_CONSUMER_PG_DATABASE,
+        user: env.PIPELINE_STATE_CONSUMER_PG_USER,
+        password: env.PIPELINE_STATE_CONSUMER_PG_PASSWORD,
+    },
 };
 
 // ===============================================

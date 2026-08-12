@@ -1,10 +1,16 @@
 import { isoNowIST } from "@/lib/isoNowIST";
 import {
   commitByCorrelationId,
+  countPendingForSubscriber,
   registerWs,
   unregisterWs,
   wsClients,
+  type GatewayWS,
 } from "@/lib/kafka-ws-bridge";
+import {
+  handleSubscriberPublish,
+  WsPublishCommandSchema,
+} from "@/lib/ws-subscriber-publish";
 import { apiKeyAuth } from "@/middleware/auth";
 import { Elysia } from "elysia";
 import z from "zod";
@@ -21,13 +27,14 @@ const UnsubscribeSchema = z.object({
 
 const ProcessedSchema = z.object({
   type: z.literal("processed"),
-  correlationId: z.uuid(),
+  correlationId: z.uuid({ version: "v7" }),
 });
 
 const MessageSchema = z.union([
   SubscribeSchema,
   UnsubscribeSchema,
   ProcessedSchema,
+  WsPublishCommandSchema,
 ]);
 
 const topicSubscribers = new Map<string, Set<number>>();
@@ -51,7 +58,7 @@ export default new Elysia()
         return;
       }
 
-      registerWs(subscriberId, ws);
+      registerWs(subscriberId, ws as unknown as GatewayWS);
 
       console.log(
         `${isoNowIST()}\t[WsSubscribe:Action]\tSUBSCRIBER CONNECTED ID: ${subscriberId}`,
@@ -75,7 +82,7 @@ export default new Elysia()
 
         if (!result.success) {
           console.log(
-            `${isoNowIST()}\t[WsSubscribe:Error]\tINVALID MESSAGE FORMAT`,
+            `${isoNowIST()}\t[WsSubscribe:Error]\tINVALID MESSAGE FORMAT subscriberId=${subscriberId}`,
           );
 
           ws.send({
@@ -101,15 +108,6 @@ export default new Elysia()
           console.log(
             `${isoNowIST()}\t[WsSubscribe:Action]\tSUBSCRIBER ${subscriberId} JOINED Topic: ${parsed.topic}`,
           );
-          console.log(`${isoNowIST()}\t[WsSubscribe:Log]\tSUBSCRIBER TOPICS:`, [
-            ...subscriptions,
-          ]);
-          console.log(
-            `${isoNowIST()}\t[WsSubscribe:Log]\tTOPIC SUBSCRIBERS (${parsed.topic}): ${topicSubscribers.get(parsed.topic)!.size}`,
-          );
-          console.log(
-            `${isoNowIST()}\t[WsSubscribe:Log]\tACTIVE WS CONNECTIONS: ${wsClients.size}`,
-          );
 
           ws.send({ type: "subscribed", topic: parsed.topic });
           return;
@@ -124,35 +122,62 @@ export default new Elysia()
             if (set.size === 0) topicSubscribers.delete(parsed.topic);
           }
 
-          console.log(
-            `${isoNowIST()}\t[WsSubscribe:Action]\tSUBSCRIBER ${subscriberId} UNSUBSCRIBED Topic: ${parsed.topic}`,
-          );
-          console.log(`${isoNowIST()}\t[WsSubscribe:Log]\tSUBSCRIBER TOPICS:`, [
-            ...subscriptions,
-          ]);
-          console.log(
-            `${isoNowIST()}\t[WsSubscribe:Log]\tTOPIC SUBSCRIBERS (${parsed.topic}): ${set?.size ?? 0}`,
-          );
-          console.log(
-            `${isoNowIST()}\t[WsSubscribe:Log]\tACTIVE WS CONNECTIONS: ${wsClients.size}`,
-          );
-
           ws.send({ type: "unsubscribed", topic: parsed.topic });
           return;
         }
 
-        if (parsed.type === "processed") {
-          await commitByCorrelationId(parsed.correlationId);
-
-          ws.send({
-            type: "ack-received",
-            correlationId: parsed.correlationId,
+        if (parsed.type === "publish") {
+          const clientId = (ws as unknown as GatewayWS).data.clientId;
+          const pub = await handleSubscriberPublish(parsed, {
+            subscriberId,
+            clientId,
           });
+
+          if (pub.ok) {
+            ws.send({
+              type: "published",
+              requestId: pub.requestId,
+              topic: pub.topic,
+              partition: pub.partition,
+              offset: pub.offset,
+            });
+          } else {
+            ws.send({
+              type: "error",
+              message: pub.error,
+              reason: pub.reason,
+              requestId: pub.requestId,
+            });
+          }
+          return;
+        }
+
+        if (parsed.type === "processed") {
+          const ackResult = await commitByCorrelationId(
+            parsed.correlationId,
+            subscriberId,
+          );
+
+          if (ackResult.ok) {
+            ws.send({
+              type: "ack-received",
+              correlationId: parsed.correlationId,
+            });
+          } else {
+            ws.send({
+              type: "error",
+              message: "ACK rejected",
+              reason: ackResult.reason,
+              correlationId: parsed.correlationId,
+            });
+          }
 
           return;
         }
       } catch {
-        console.log(`${isoNowIST()}\t[WsSubscribe:Error]\tMALFORMED JSON`);
+        console.log(
+          `${isoNowIST()}\t[WsSubscribe:Error]\tMALFORMED JSON subscriberId=${subscriberId}`,
+        );
 
         ws.send({ type: "error", message: "Malformed JSON" });
         return;
@@ -170,6 +195,7 @@ export default new Elysia()
         }
       }
 
+      const pending = countPendingForSubscriber(subscriberId);
       unregisterWs(subscriberId);
 
       if (wsClients.size === 0) {
@@ -177,13 +203,7 @@ export default new Elysia()
       }
 
       console.log(
-        `${isoNowIST()}\t[WsSubscribe:Action]\tSUBSCRIBER DISCONNECTED ID: ${subscriberId}`,
-      );
-      console.log(`${isoNowIST()}\t[WsSubscribe:Log]\tSUBSCRIBER TOPICS:`, [
-        ...subscriptions,
-      ]);
-      console.log(
-        `${isoNowIST()}\t[WsSubscribe:Log]\tACTIVE WS CONNECTIONS: ${wsClients.size}`,
+        `${isoNowIST()}\t[WsBridge:Disconnect]\tsubscriberId=${subscriberId}\tpendingAcks=${pending}`,
       );
 
       ws.data.subscriptions.clear();

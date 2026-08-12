@@ -2,6 +2,7 @@
 
 ./
 ├── .env.development
+├── .env.example
 ├── .env.production
 ├── .eslintcache
 ├── .github/
@@ -19,6 +20,7 @@
 ├── CHANGELOG.md
 ├── LICENSE
 ├── README.md
+├── SUMMARY.md
 ├── bun.lock
 ├── docker/
 │   ├── Dockerfile
@@ -30,8 +32,6 @@
 │   ├── global.css
 │   └── logo.png
 ├── release.config.js
-├── scripts/
-│   └── kafka-api-gateway-pm2.config.cjs
 ├── src/
 │   ├── components/
 │   │   ├── About.tsx
@@ -41,6 +41,9 @@
 │   │   └── Login.tsx
 │   ├── index.ts
 │   ├── lib/
+│   │   ├── __tests__/
+│   │   │   ├── kafka-ws-bridge-ack.test.ts
+│   │   │   └── ws-subscriber-publish.test.ts
 │   │   ├── constants.ts
 │   │   ├── db-scripts/
 │   │   │   ├── fn-create-api-key.ts
@@ -53,10 +56,21 @@
 │   │   ├── isoNowIST.ts
 │   │   ├── kafka-ws-bridge.ts
 │   │   ├── kafka.config.ts
-│   │   └── producer.kafka.ts
+│   │   ├── producer.kafka.ts
+│   │   ├── ulid.ts
+│   │   └── ws-subscriber-publish.ts
 │   ├── middleware/
 │   │   ├── auth.ts
 │   │   └── server-gate.ts
+│   ├── pipeline-state-consumer/
+│   │   ├── __tests__/
+│   │   │   ├── events.test.ts
+│   │   │   └── processor.test.ts
+│   │   ├── lib/
+│   │   │   ├── events.ts
+│   │   │   ├── postgres.ts
+│   │   │   └── processor.ts
+│   │   └── main.ts
 │   ├── routes/
 │   │   ├── about.ts
 │   │   ├── healthz.ts
@@ -67,6 +81,9 @@
 │   │       │   └── login.ts
 │   │       ├── auth.router.ts
 │   │       ├── kafka/
+│   │       │   ├── __tests__/
+│   │       │   │   ├── http-publish.route.test.ts
+│   │       │   │   └── phase2-adapter-contract.test.ts
 │   │       │   ├── http-publish.ts
 │   │       │   ├── ws-publish.ts
 │   │       │   └── ws-subscribe.ts
@@ -77,6 +94,9 @@
 │   │       └── v1.router.ts
 │   ├── schemas/
 │   │   └── login.ts
+│   ├── scripts/
+│   │   ├── hash.ts
+│   │   └── kafka-api-gateway-pm2.config.cjs
 │   ├── server.ts
 │   ├── tailwind.css
 │   └── types/
@@ -92,4 +112,4 @@
 │   └── ws-test5.ts
 └── tsconfig.json
 
-20 directories, 71 files
+25 directories, 86 files

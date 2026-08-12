@@ -1,10 +1,11 @@
-/*! tailwindcss v4.2.0 | MIT License | https://tailwindcss.com */
+/*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */
 @layer properties;
 @layer theme, base, components, utilities;
 @layer theme {
   :root, :host {
-    --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
-      "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+      "Noto Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+      "Segoe UI Symbol", "Noto Color Emoji";
     --font-mono: "JetBrains Mono", monospace;
     --spacing: 0.25rem;
     --text-xs: 0.75rem;
@@ -68,7 +69,7 @@
     line-height: 1.5;
     -webkit-text-size-adjust: 100%;
     tab-size: 4;
-    font-family: var(--default-font-family, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");
+    font-family: var(--default-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");
     font-feature-settings: var(--default-font-feature-settings, normal);
     font-variation-settings: var(--default-font-variation-settings, normal);
     -webkit-tap-highlight-color: transparent;
@@ -120,7 +121,7 @@
     border-color: inherit;
     border-collapse: collapse;
   }
-  :-moz-focusring {
+  :-moz-focusring:where(:not(iframe)) {
     outline: auto;
   }
   progress {
@@ -218,12 +219,6 @@
   .static {
     position: static;
   }
-  .start {
-    inset-inline-start: var(--spacing);
-  }
-  .end {
-    inset-inline-end: var(--spacing);
-  }
   .top-1\/2 {
     top: calc(1 / 2 * 100%);
   }
@@ -280,6 +275,9 @@
   }
   .inline-flex {
     display: inline-flex;
+  }
+  .table {
+    display: table;
   }
   .h-4 {
     height: calc(var(--spacing) * 4);
@@ -523,136 +521,86 @@
     --tw-duration: 200ms;
     transition-duration: 200ms;
   }
-  .placeholder\:text-text-muted {
-    &::placeholder {
-      color: var(--color-text-muted);
+  .placeholder\:text-text-muted::placeholder {
+    color: var(--color-text-muted);
+  }
+  @media (hover: hover) {
+    .hover\:bg-button-hover:hover {
+      background-color: var(--color-button-hover);
+    }
+    .hover\:text-text-primary:hover {
+      color: var(--color-text-primary);
+    }
+    .hover\:underline:hover {
+      text-decoration-line: underline;
     }
   }
-  .hover\:bg-button-hover {
-    &:hover {
-      @media (hover: hover) {
-        background-color: var(--color-button-hover);
-      }
-    }
+  .focus\:border-focus-border:focus {
+    border-color: var(--color-focus-border);
   }
-  .hover\:text-text-primary {
-    &:hover {
-      @media (hover: hover) {
-        color: var(--color-text-primary);
-      }
-    }
+  .focus\:outline-none:focus {
+    --tw-outline-style: none;
+    outline-style: none;
   }
-  .hover\:underline {
-    &:hover {
-      @media (hover: hover) {
-        text-decoration-line: underline;
-      }
-    }
+  .active\:scale-95:active {
+    --tw-scale-x: 95%;
+    --tw-scale-y: 95%;
+    --tw-scale-z: 95%;
+    scale: var(--tw-scale-x) var(--tw-scale-y);
   }
-  .focus\:border-focus-border {
-    &:focus {
-      border-color: var(--color-focus-border);
-    }
+  .active\:bg-button-active:active {
+    background-color: var(--color-button-active);
   }
-  .focus\:outline-none {
-    &:focus {
-      --tw-outline-style: none;
-      outline-style: none;
-    }
-  }
-  .active\:scale-95 {
-    &:active {
-      --tw-scale-x: 95%;
-      --tw-scale-y: 95%;
-      --tw-scale-z: 95%;
-      scale: var(--tw-scale-x) var(--tw-scale-y);
-    }
-  }
-  .active\:bg-button-active {
-    &:active {
-      background-color: var(--color-button-active);
-    }
-  }
-  .md\:mt-8 {
-    @media (width >= 48rem) {
+  @media (width >= 48rem) {
+    .md\:mt-8 {
       margin-top: calc(var(--spacing) * 8);
     }
-  }
-  .md\:mb-8 {
-    @media (width >= 48rem) {
+    .md\:mb-8 {
       margin-bottom: calc(var(--spacing) * 8);
     }
-  }
-  .md\:h-5 {
-    @media (width >= 48rem) {
+    .md\:h-5 {
       height: calc(var(--spacing) * 5);
     }
-  }
-  .md\:w-5 {
-    @media (width >= 48rem) {
+    .md\:w-5 {
       width: calc(var(--spacing) * 5);
     }
-  }
-  .md\:max-w-\(--width-login\) {
-    @media (width >= 48rem) {
+    .md\:max-w-\(--width-login\) {
       max-width: var(--width-login);
     }
-  }
-  .md\:gap-5 {
-    @media (width >= 48rem) {
+    .md\:gap-5 {
       gap: calc(var(--spacing) * 5);
     }
-  }
-  .md\:p-5 {
-    @media (width >= 48rem) {
+    .md\:p-5 {
       padding: calc(var(--spacing) * 5);
     }
-  }
-  .md\:p-6 {
-    @media (width >= 48rem) {
+    .md\:p-6 {
       padding: calc(var(--spacing) * 6);
     }
-  }
-  .md\:p-8 {
-    @media (width >= 48rem) {
+    .md\:p-8 {
       padding: calc(var(--spacing) * 8);
     }
-  }
-  .md\:p-12 {
-    @media (width >= 48rem) {
+    .md\:p-12 {
       padding: calc(var(--spacing) * 12);
     }
-  }
-  .md\:px-0 {
-    @media (width >= 48rem) {
-      padding-inline: calc(var(--spacing) * 0);
+    .md\:px-0 {
+      padding-inline: 0px;
     }
-  }
-  .md\:py-3\.5 {
-    @media (width >= 48rem) {
+    .md\:py-3\.5 {
       padding-block: calc(var(--spacing) * 3.5);
     }
-  }
-  .md\:text-2xl {
-    @media (width >= 48rem) {
+    .md\:text-2xl {
       font-size: var(--text-2xl);
       line-height: var(--tw-leading, var(--text-2xl--line-height));
     }
-  }
-  .md\:text-3xl {
-    @media (width >= 48rem) {
+    .md\:text-3xl {
       font-size: var(--text-3xl);
       line-height: var(--tw-leading, var(--text-3xl--line-height));
     }
-  }
-  .md\:text-base {
-    @media (width >= 48rem) {
+    .md\:text-base {
       font-size: var(--text-base);
       line-height: var(--tw-leading, var(--text-base--line-height));
     }
-  }
-  .md\:text-sm {
-    @media (width >= 48rem) {
+    .md\:text-sm {
       font-size: var(--text-sm);
       line-height: var(--tw-leading, var(--text-sm--line-height));
     }

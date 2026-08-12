@@ -1,42 +1,124 @@
-import { MyError, errors } from "@/lib/errors";
 import { kafka } from "@/lib/kafka.config";
-import { z } from 'zod';
+import { z } from "zod";
 import { isoNowIST } from "@/lib/isoNowIST";
 import { env } from "@/lib/env";
 
+/**
+ * Topics that require a responsible-subscriber ACK before Kafka offset commit.
+ * For these topics the bridge never silently drops when no subscriber is present,
+ * and it will not advance a partition past an unacknowledged message.
+ */
+const ACK_REQUIRED_TOPICS = new Set<string>(["record-log-ingest", "record-log-status"]);
+
+export function isAckRequiredTopic(topic: string): boolean {
+  return ACK_REQUIRED_TOPICS.has(topic);
+}
+
 const KafkaMsgValSchema = z.object({
-  correlationId: z.uuid(),           // or .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) if you want strict v4
-  apiUserId: z.number().int().positive(),
-  jobName: z.string().min(1),
-  timestamp: z.string().min(1),
+  eventType: z.enum(["ingest", "status"]),
+  correlationId: z.uuid({ version: "v7" }).min(1, "Correlation ID is required"),
+  topic: z.string().min(1, "Topic is required"),
+  jobName: z.string().min(1, "Job name is required"),
+  records: z.array(z.string()).min(1, "At least one record is required"),
+  clientRequestId: z.string().min(1, "Client Request ID is required"),
+  timestamp: z.iso.datetime({ offset: true }),
+  apiUserId: z.number().int().positive().optional(),
+  stage: z.string().optional(),
+  status: z.string().optional(),
+  sequence: z.number().nullable().optional(),
+  details: z.record(z.string(), z.unknown()).optional(),
 });
 
-// type KafkaMsgVal = z.infer<typeof KafkaMsgValSchema>;
-
-/**
- * Minimal WS shape
- */
 export interface GatewayWS {
-  send(data: string): void;
+  send(data: string | Record<string, unknown>): void;
   data: {
     subscriptions: Set<string>;
+    subscriberId: number;
+    clientId?: string;
   };
 }
 
-/**
- * WS clients
- */
 export const wsClients = new Map<number, GatewayWS>();
 
-/**
- * correlationId → offset info
- */
-const pendingOffsets = new Map<
-  string,
-  { topic: string; partition: number; offset: string }
->();
+type PendingAck = {
+  topic: string;
+  partition: number;
+  offset: string;
+  correlationId: string;
+  /** Authoritative owner: gateway-assigned WS connection id */
+  subscriberId: number;
+  clientId?: string;
+  resolve: () => void;
+  reject: (err: Error) => void;
+  /** True only after the WS event has been sent */
+  delivered: boolean;
+};
 
-let consumerRef: ReturnType<typeof kafka.consumer> | null = null;
+/**
+ * correlationId → pending delivery awaiting processed ACK from the owning connection.
+ * Must be registered BEFORE the event is sent on the WebSocket.
+ */
+const pendingAcks = new Map<string, PendingAck>();
+
+let _consumerRef: ReturnType<typeof kafka.consumer> | null = null;
+
+/** Test/introspection helpers (not for production control paths). */
+export function _testGetPendingAck(
+  correlationId: string,
+): PendingAck | undefined {
+  return pendingAcks.get(correlationId);
+}
+
+export function _testHasPendingAck(correlationId: string): boolean {
+  return pendingAcks.has(correlationId);
+}
+
+export function _testPendingCount(): number {
+  return pendingAcks.size;
+}
+
+/**
+ * Register a pending ACK for a delivery.
+ * MUST be called before the event is sent to the WebSocket.
+ * Returns the promise that resolves when the owning connection ACKs.
+ */
+export function registerPendingAck(args: {
+  topic: string;
+  partition: number;
+  offset: string;
+  correlationId: string;
+  subscriberId: number;
+  clientId?: string;
+}): Promise<void> {
+  const { topic, partition, offset, correlationId, subscriberId, clientId } =
+    args;
+
+  if (pendingAcks.has(correlationId)) {
+    // Should not happen for distinct Kafka deliveries; replace carefully.
+    const prev = pendingAcks.get(correlationId)!;
+    prev.reject(new Error(`superseded pending ACK for corr=${correlationId}`));
+    pendingAcks.delete(correlationId);
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    pendingAcks.set(correlationId, {
+      topic,
+      partition,
+      offset,
+      correlationId,
+      subscriberId,
+      clientId,
+      resolve,
+      reject,
+      delivered: false,
+    });
+  });
+}
+
+export function markPendingDelivered(correlationId: string): void {
+  const p = pendingAcks.get(correlationId);
+  if (p) p.delivered = true;
+}
 
 export function registerWs(id: number, ws: GatewayWS) {
   wsClients.set(id, ws);
@@ -44,43 +126,192 @@ export function registerWs(id: number, ws: GatewayWS) {
 
 export function unregisterWs(id: number) {
   wsClients.delete(id);
+  for (const [corr, pending] of pendingAcks.entries()) {
+    if (pending.subscriberId === id) {
+      console.log(
+        `${isoNowIST()}\t[WsBridge:Disconnect]\tsubscriberId=${id}\tclientId=${pending.clientId ?? "?"}\tpendingAcks=1\tcorr=${corr}\ttopic=${pending.topic}\tpartition=${pending.partition}\toffset=${pending.offset}`,
+      );
+      pendingAcks.delete(corr);
+      pending.reject(
+        new Error(`subscriber ${id} disconnected before ACK for corr=${corr}`),
+      );
+    }
+  }
 }
 
 /**
- * Called from ws-subscribe when client ACKs
+ * Decide whether it is safe to resolve/commit after an ACK arrived.
+ * Must NOT commit if the KafkaJS batch is stale or the consumer is not running
+ * (e.g. rebalance during ACK wait).
  */
-export async function commitByCorrelationId(correlationId: string) {
+export function shouldCommitAfterAck(ctx: {
+  isRunning: () => boolean;
+  isStale: () => boolean;
+}): { ok: true } | { ok: false; reason: string } {
+  if (!ctx.isRunning()) {
+    return { ok: false, reason: "consumer-not-running" };
+  }
+  if (ctx.isStale()) {
+    return { ok: false, reason: "batch-stale" };
+  }
+  return { ok: true };
+}
 
-  const info = pendingOffsets.get(correlationId);
+export function countPendingForSubscriber(subscriberId: number): number {
+  let n = 0;
+  for (const p of pendingAcks.values()) {
+    if (p.subscriberId === subscriberId) n++;
+  }
+  return n;
+}
 
-  if (!info || !consumerRef) {
+/**
+ * Called from ws-subscribe when a client sends `processed`.
+ * ACK is accepted ONLY if it comes from the WS connection that owns the pending delivery.
+ * Does NOT commit if ownership fails.
+ */
+export async function commitByCorrelationId(
+  correlationId: string,
+  fromSubscriberId: number,
+): Promise<{ ok: boolean; reason?: string }> {
+  const info = pendingAcks.get(correlationId);
+
+  if (!info) {
     console.log(
-      `${isoNowIST()}\t[WsBridge:Error]\tACK FAILED corr=${correlationId} offset not found`
+      `${isoNowIST()}\t[WsBridge:ACK]\tREJECTED corr=${correlationId}\tsubscriberId=${fromSubscriberId}\treason=not-found`,
     );
-    return;
+    return { ok: false, reason: "offset not found or already committed" };
   }
 
-  await consumerRef.commitOffsets([
-    {
-      topic: info.topic,
-      partition: info.partition,
-      offset: (Number(info.offset) + 1).toString(),
-    },
-  ]);
+  // Ownership check BEFORE any commit side-effect. Authoritative identity is the
+  // WS connection that received the event (subscriberId), never client-supplied.
+  if (info.subscriberId !== fromSubscriberId) {
+    console.log(
+      `${isoNowIST()}\t[WsBridge:ACK]\tREJECTED corr=${correlationId}\tsubscriberId=${fromSubscriberId}\townerSubscriberId=${info.subscriberId}\treason=wrong-owner`,
+    );
+    return { ok: false, reason: "ACK from non-owning connection" };
+  }
 
+  // Ownership verified — resolve the waiter. Kafka resolveOffset/commitOffsets
+  // happen in the eachBatch loop after this promise resolves, preserving
+  // strict per-partition ordering.
   console.log(
-    `${isoNowIST()}\t[WsBridge:Action]\tSubscriber ACK → Kafka Commit | topic=${info.topic} corr=${correlationId} partition=${info.partition} offset=${info.offset}`
+    `${isoNowIST()}\t[WsBridge:ACK]\ttopic=${info.topic}\tpartition=${info.partition}\toffset=${info.offset}\tcorr=${correlationId}\tsubscriberId=${info.subscriberId}\tclientId=${info.clientId ?? "?"}`,
   );
 
-  pendingOffsets.delete(correlationId);
+  pendingAcks.delete(correlationId);
+  info.resolve();
+  return { ok: true };
+}
+
+function pickResponsibleSubscriber(
+  topic: string,
+): { id: number; ws: GatewayWS } | null {
+  const candidates: { id: number; ws: GatewayWS }[] = [];
+  for (const [id, ws] of wsClients.entries()) {
+    if (ws.data.subscriptions.has(topic)) {
+      candidates.push({ id, ws });
+    }
+  }
+  if (candidates.length === 0) return null;
+  const preferred = candidates.find(
+    (c) => c.ws.data.clientId === "pipeline-state-consumer",
+  );
+  if (preferred) return preferred;
+  candidates.sort((a, b) => a.id - b.id);
+  return candidates[0]!;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+export type SubscriberWaitCtx = {
+  heartbeat: () => Promise<void>;
+  isRunning: () => boolean;
+  isStale: () => boolean;
+  /** Poll interval between subscriber lookups (ms). */
+  intervalMs?: number;
+};
+
+/**
+ * Wait until a responsible subscriber is available for `topic`.
+ *
+ * Does NOT throw solely because the subscriber is temporarily absent.
+ * Heartbeats while waiting. Stops safely (returns null) when the consumer
+ * is not running or the KafkaJS batch is stale — without resolving/committing.
+ *
+ * Prefer clientId === "pipeline-state-consumer" via pickResponsibleSubscriber.
+ */
+export async function waitForResponsibleSubscriber(
+  topic: string,
+  ctx: SubscriberWaitCtx,
+): Promise<{ id: number; ws: GatewayWS } | null> {
+  const intervalMs = ctx.intervalMs ?? 500;
+  while (true) {
+    const sub = pickResponsibleSubscriber(topic);
+    if (sub) return sub;
+
+    if (!ctx.isRunning()) {
+      return null;
+    }
+    if (ctx.isStale()) {
+      return null;
+    }
+
+    try {
+      await ctx.heartbeat();
+    } catch {
+      /* heartbeat errors surface via KafkaJS session handling */
+    }
+    await sleep(intervalMs);
+  }
+}
+
+/**
+ * Wait for ACK while periodically heartbeating so the consumer group session stays alive.
+ */
+async function waitForAckWithHeartbeat(
+  ackPromise: Promise<void>,
+  heartbeat: () => Promise<void>,
+  timeoutMs: number,
+): Promise<void> {
+  let settled = false;
+  const tracked = ackPromise.then(
+    () => {
+      settled = true;
+    },
+    (err) => {
+      settled = true;
+      throw err;
+    },
+  );
+
+  const deadline = Date.now() + timeoutMs;
+  while (!settled && Date.now() < deadline) {
+    try {
+      await heartbeat();
+    } catch {
+      /* heartbeat failure will surface via KafkaJS session handling */
+    }
+    await Promise.race([tracked, sleep(3000).then(() => undefined)]);
+  }
+
+  if (!settled) {
+    throw new Error("ACK timeout while heartbeating");
+  }
+  await tracked;
 }
 
 export async function startKafkaWsBridge() {
   const consumer = kafka.consumer({
     groupId: env.KAFKA_GROUP_ID,
+    // Keep session alive during long ACK waits (default sessionTimeout is 30s)
+    sessionTimeout: 60_000,
+    heartbeatInterval: 3_000,
   });
 
-  consumerRef = consumer;
+  _consumerRef = consumer;
 
   await consumer.connect();
 
@@ -88,58 +319,270 @@ export async function startKafkaWsBridge() {
     topic: /^(?!__).*$/,
   });
 
+  /**
+   * eachBatch design (KafkaJS 2.2.4):
+   * - eachBatch is invoked per topic-partition batch
+   * - eachBatchAutoResolve: false → we control resolveOffset
+   * - autoCommit: false → we control commitOffsets
+   * - Process messages sequentially within the batch so offset N is ACKed
+   *   before N+1 is delivered (strict per-partition ordering)
+   * - Call heartbeat() while waiting for ACK so session does not expire
+   * - Independent partitions progress independently (KafkaJS schedules
+   *   separate eachBatch invocations per partition)
+   */
   await consumer.run({
-    eachMessage: async ({ topic, partition, message }) => {
-      const value = message.value?.toString();
-      if (!value) return;
+    autoCommit: false,
+    eachBatchAutoResolve: false,
+    eachBatch: async ({
+      batch,
+      resolveOffset,
+      heartbeat,
+      isRunning,
+      isStale,
+    }) => {
+      const { topic, partition, messages } = batch;
 
-      const result = KafkaMsgValSchema.safeParse(JSON.parse(value));
+      for (const message of messages) {
+        if (!isRunning() || isStale()) break;
 
-      if (!result.success) {
-        throw new MyError({
-          code: "BAD_REQUEST",
-          message: errors.BAD_REQUEST.INVALID_INPUT.message,
-          error: errors.BAD_REQUEST.INVALID_INPUT.error,
+        const value = message.value?.toString();
+
+        if (!value) {
+          resolveOffset(message.offset);
+
+          await consumer.commitOffsets([
+            {
+              topic,
+              partition,
+              offset: (BigInt(message.offset) + 1n).toString(),
+            },
+          ]);
+
+          await heartbeat();
+
+          continue;
+        }
+
+        let parsedJson: unknown;
+
+        try {
+          parsedJson = JSON.parse(value);
+        } catch {
+          console.log(
+            `${isoNowIST()}\t[WsBridge:Error]\tMALFORMED JSON topic=${topic} partition=${partition} offset=${message.offset}`,
+          );
+          resolveOffset(message.offset);
+
+          await consumer.commitOffsets([
+            {
+              topic,
+              partition,
+              offset: (BigInt(message.offset) + 1n).toString(),
+            },
+          ]);
+          await heartbeat();
+          continue;
+        }
+
+        // FIXME: Remove debug log before commit
+        // console.log(`startKafkaWsBridge parsedJson`, JSON.stringify(parsedJson, null));
+
+        const result = KafkaMsgValSchema.safeParse(parsedJson);
+
+        if (!result.success) {
+          console.log(
+            `${isoNowIST()}\t[WsBridge:Error]\tINVALID MESSAGE topic=${topic} partition=${partition} offset=${message.offset} issues=${JSON.stringify(result.error.issues)}`,
+          );
+
+          resolveOffset(message.offset);
+
+          await consumer.commitOffsets([
+            {
+              topic,
+              partition,
+              offset: (BigInt(message.offset) + 1n).toString(),
+            },
+          ]);
+
+          await heartbeat();
+
+          continue;
+        }
+
+        const {
+          eventType,
+          correlationId,
+          // topic,
+          jobName,
+          records,
+          clientRequestId,
+          timestamp,
+        } = result.data;
+
+        const requiresAck = isAckRequiredTopic(topic);
+
+        let owner = pickResponsibleSubscriber(topic);
+
+        if (!owner && requiresAck) {
+          console.log(
+            `${isoNowIST()}\t[WsBridge:Log]\tWAITING_FOR_SUBSCRIBER topic=${topic} corr=${correlationId} partition=${partition} offset=${message.offset}`,
+          );
+
+          // Controlled wait: heartbeat, no throw-to-restart. Stop only if
+          // consumer stops or batch becomes stale (rebalance).
+          owner = await waitForResponsibleSubscriber(topic, {
+            heartbeat,
+            isRunning,
+            isStale,
+          });
+        }
+
+        if (!owner) {
+          if (requiresAck) {
+            // Still no subscriber (consumer stopped or batch stale).
+            // Do NOT resolveOffset / commit. Do NOT throw to force KafkaJS restart.
+            console.log(
+              `${isoNowIST()}\t[WsBridge:Log]\tNO_SUBSCRIBER_STOP topic=${topic} corr=${correlationId} partition=${partition} offset=${message.offset} reason=stopped-or-stale`,
+            );
+            break;
+          }
+          console.log(
+            `${isoNowIST()}\t[WsBridge:Log]\tDROP topic=${topic} corr=${correlationId} reason=no-subscribers`,
+          );
+          resolveOffset(message.offset);
+          await consumer.commitOffsets([
+            {
+              topic,
+              partition,
+              offset: (BigInt(message.offset) + 1n).toString(),
+            },
+          ]);
+          await heartbeat();
+          continue;
+        }
+
+        if (!requiresAck) {
+          // Legacy topics: fan-out and commit after delivery (no durable ACK).
+          let delivered = 0;
+
+          for (const [, ws] of wsClients.entries()) {
+            if (!ws.data.subscriptions.has(topic)) continue;
+            ws.send(
+              JSON.stringify({
+                type: "event",
+                ...result.data,
+              }),
+            );
+            delivered++;
+          }
+
+          resolveOffset(message.offset);
+
+          await consumer.commitOffsets([
+            {
+              topic,
+              partition,
+              offset: (BigInt(message.offset) + 1n).toString(),
+            },
+          ]);
+
+          console.log(
+            `${isoNowIST()}\t[WsBridge:Log]\tKafka → Gateway → Subscribers | topic=${topic} corr=${correlationId} delivered=${delivered} autoCommitted=true`,
+          );
+
+          await heartbeat();
+
+          continue;
+        }
+
+        // ---- ACK-required path ----
+        // CRITICAL: register pending ACK BEFORE sending the event so a fast
+        // subscriber cannot ACK before the entry exists.
+
+        const ackPromise = registerPendingAck({
+          topic,
+          partition,
+          offset: message.offset,
+          correlationId,
+          subscriberId: owner.id,
+          clientId: owner.ws.data.clientId,
         });
-      }
 
-      const { correlationId } = result.data;
+        // Fan-out for visibility; owner is the sole ACK authority.
+        for (const [id, ws] of wsClients.entries()) {
+          if (!ws.data.subscriptions.has(topic)) continue;
 
-      // store offset for later commit
-      pendingOffsets.set(correlationId, {
-        topic,
-        partition,
-        offset: message.offset,
-      });
+          ws.send(
+            JSON.stringify({
+              type: "event",
+              ...result.data,
+            }),
+          );
 
-      // fan-out section
-      
-      let delivered = 0;
+          if (id === owner.id) {
+            markPendingDelivered(correlationId);
 
-      for (const ws of wsClients.values()) {
-        if (!ws.data.subscriptions.has(topic)) continue;
+            console.log(
+              `${isoNowIST()}\t[WsBridge:Deliver]\ttopic=${topic}\tpartition=${partition}\toffset=${message.offset}\tcorr=${correlationId}\tsubscriberId=${id}\tclientId=${ws.data.clientId ?? "?"}`,
+            );
+          }
+        }
 
-        ws.send(
-          JSON.stringify({
-            type: "event",
+        // Wait for ACK while heartbeating (session must stay alive).
+        const timeoutMs = 5 * 60 * 1000;
+
+        try {
+          await waitForAckWithHeartbeat(ackPromise, heartbeat, timeoutMs);
+        } catch (err) {
+          // Disconnect / timeout / no-ACK: do NOT resolveOffset or commit.
+          // Clear pending if still present.
+          const still = pendingAcks.get(correlationId);
+          if (still) {
+            pendingAcks.delete(correlationId);
+          }
+
+          console.log(
+            `${isoNowIST()}\t[WsBridge:Log]\tACK_WAIT_FAILED topic=${topic} partition=${partition} offset=${message.offset} corr=${correlationId} err=${err instanceof Error ? err.message : String(err)}`,
+          );
+
+          throw err;
+        }
+
+        // ACK received from owning connection — but only resolve/commit if this
+        // batch is still valid. A rebalance during the ACK wait can mark the
+        // batch stale; committing from a stale batch is unsafe.
+        const commitGate = shouldCommitAfterAck({ isRunning, isStale });
+
+        if (!commitGate.ok) {
+          console.log(
+            `${isoNowIST()}\t[WsBridge:Log]\tSKIP_COMMIT_STALE topic=${topic} partition=${partition} offset=${message.offset} corr=${correlationId} reason=${commitGate.reason}`,
+          );
+
+          // Do not resolveOffset/commit. Throw so KafkaJS does not treat the
+          // batch as successfully processed; offset remains uncommitted for redelivery.
+          throw new Error(
+            `ACK arrived but batch is not safe to commit: ${commitGate.reason} corr=${correlationId}`,
+          );
+        }
+
+        const nextOffset = (BigInt(message.offset) + 1n).toString();
+
+        resolveOffset(message.offset);
+
+        await consumer.commitOffsets([
+          {
             topic,
-            ...result.data,
-          })
-        );
+            partition,
+            offset: nextOffset,
+          },
+        ]);
 
-        delivered++;
-      }
-
-      if (delivered === 0) {
         console.log(
-          `${isoNowIST()}\t[WsBridge:Log]\tDROP topic=${topic} corr=${correlationId} reason=no-subscribers`
+          `${isoNowIST()}\t[WsBridge:Commit]\ttopic=${topic}\tpartition=${partition}\tcommittedOffset=${nextOffset}\tcorr=${correlationId}\tclientId=${owner.ws.data.clientId ?? "?"}`,
         );
-      } else {
-        console.log(
-          `${isoNowIST()}\t[WsBridge:Log]\tKafka → Gateway → Subscribers | topic=${topic} corr=${correlationId} delivered=${delivered}`
-        );
-      }
 
+        await heartbeat();
+      }
     },
   });
 }

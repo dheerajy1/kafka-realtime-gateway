@@ -117,12 +117,25 @@ export const envSchema = z.object({
       message: "APP_ENV must be under 50 characters long",
     })
     .describe("App environment"),
-
+  // ============================
+  // KAFKA
+  // ============================
   KAFKA_BROKERS: z
     .string()
     .trim()
     .min(1, { message: "KAFKA_BROKERS is required and cannot be empty" })
     .describe("Comma-separated list of Kafka broker addresses"),
+
+  KAFKA_CLIENT_ID: z
+    .string()
+    .trim()
+    .min(1, { message: "KAFKA_CLIENT_ID is required and cannot be empty" })
+    .max(100, {
+      message: "KAFKA_CLIENT_ID must be under 100 characters long",
+    })
+    .describe(
+      "Kafka client id for kafka-api-gateway (used to identify the producer/consumer application)",
+    ),
 
   KAFKA_GROUP_ID: z
     .string()
@@ -134,4 +147,84 @@ export const envSchema = z.object({
     .describe(
       "Kafka consumer group id for kafka-api-gateway (unique per environment)",
     ),
+
+  // ============================
+  // PIPELINE STATE CONSUMER
+  // ============================
+  PIPELINE_STATE_CONSUMER_PG_DATABASE: z
+    .string()
+    .trim()
+    .min(1, {
+      message:
+        "PIPELINE_STATE_CONSUMER_PG_DATABASE is required and cannot be empty",
+    })
+    .max(100)
+    .describe("Database name for pipeline-state-consumer"),
+
+  PIPELINE_STATE_CONSUMER_PG_USER: z
+    .string()
+    .trim()
+    .min(1, {
+      message:
+        "PIPELINE_STATE_CONSUMER_PG_USER is required and cannot be empty",
+    })
+    .max(100)
+    .describe("Username for pipeline-state-consumer"),
+
+  PIPELINE_STATE_CONSUMER_PG_PASSWORD: z
+    .string()
+    .trim()
+    .min(1, {
+      message:
+        "PIPELINE_STATE_CONSUMER_PG_PASSWORD is required and cannot be empty",
+    })
+    .max(100)
+    .describe("Password for pipeline-state-consumer"),
+
+  PIPELINE_STATE_CONSUMER_WS_URL: z
+    .url()
+    .trim()
+    .min(1, {
+      message: "PIPELINE_STATE_CONSUMER_WS_URL must be a valid string",
+    })
+    .describe("WebSocket or HTTP URL for pipeline-state-consumer"),
+
+  PIPELINE_STATE_CONSUMER_API_KEY: z
+    .string()
+    .trim()
+    .min(1, {
+      message:
+        "PIPELINE_STATE_CONSUMER_API_KEY is required and cannot be empty",
+    })
+    .max(200)
+    .describe("API key for pipeline-state-consumer"),
+
+  PIPELINE_STATE_CONSUMER_API_SECRET: z
+    .string()
+    .trim()
+    .min(1, {
+      message:
+        "PIPELINE_STATE_CONSUMER_API_SECRET is required and cannot be empty",
+    })
+    .max(200)
+    .describe("API secret for pipeline-state-consumer"),
+
+  PIPELINE_STATE_CONSUMER_TOPIC: z
+    .string()
+    .trim()
+    .min(1, {
+      message: "PIPELINE_STATE_CONSUMER_TOPIC is required and cannot be empty",
+    })
+    .max(100)
+    .describe("Kafka topic name for pipeline-state-consumer"),
+
+  PIPELINE_STATE_CONSUMER_CLIENT_ID: z
+    .string()
+    .trim()
+    .min(1, {
+      message:
+        "PIPELINE_STATE_CONSUMER_CLIENT_ID is required and cannot be empty",
+    })
+    .max(100)
+    .describe("Client ID for pipeline-state-consumer"),
 });

@@ -181,3 +181,37 @@ export const AuthErrorResponseSchema = z.object({
 });
 
 export type AuthErrorResponse = z.infer<typeof AuthErrorResponseSchema>;
+
+
+// =========================
+// MISCELLANEOUS
+// =========================
+
+export type ErrorCode =
+  | "BAD_REQUEST"
+  | "UNAUTHORIZED"
+  | "PAYMENT_REQUIRED"
+  | "FORBIDDEN"
+  | "NOT_FOUND"
+  | "METHOD_NOT_SUPPORTED"
+  | "TIMEOUT"
+  | "CONFLICT"
+  | "PRECONDITION_FAILED"
+  | "PAYLOAD_TOO_LARGE"
+  | "UNSUPPORTED_MEDIA_TYPE"
+  | "UNPROCESSABLE_CONTENT"
+  | "PRECONDITION_REQUIRED"
+  | "TOO_MANY_REQUESTS"
+  | "CLIENT_CLOSED_REQUEST"
+  | "INTERNAL_SERVER_ERROR"
+  | "NOT_IMPLEMENTED"
+  | "BAD_GATEWAY"
+  | "SERVICE_UNAVAILABLE"
+  | "GATEWAY_TIMEOUT";
+
+export type CtxAuthError = {
+  code: ErrorCode | null;
+  httpCode: number | null;
+  message: string | null;
+  error: string | null;
+};

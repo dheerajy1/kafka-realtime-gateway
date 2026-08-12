@@ -150,6 +150,8 @@ vite.config.ts.timestamp-*
 .DS_Store
 .vercel
 .vscode
+SUMMARY.md
 
 # ESLint
 .eslintcache
+

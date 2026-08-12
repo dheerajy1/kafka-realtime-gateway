@@ -1,27 +1,6 @@
-import type { OpenAPIV3 } from 'openapi-types';
+import type { OpenAPIV3 } from "openapi-types";
 import z from "zod";
-
-type ErrorCode =
-  | "BAD_REQUEST"
-  | "UNAUTHORIZED"
-  | "PAYMENT_REQUIRED"
-  | "FORBIDDEN"
-  | "NOT_FOUND"
-  | "METHOD_NOT_SUPPORTED"
-  | "TIMEOUT"
-  | "CONFLICT"
-  | "PRECONDITION_FAILED"
-  | "PAYLOAD_TOO_LARGE"
-  | "UNSUPPORTED_MEDIA_TYPE"
-  | "UNPROCESSABLE_CONTENT"
-  | "PRECONDITION_REQUIRED"
-  | "TOO_MANY_REQUESTS"
-  | "CLIENT_CLOSED_REQUEST"
-  | "INTERNAL_SERVER_ERROR"
-  | "NOT_IMPLEMENTED"
-  | "BAD_GATEWAY"
-  | "SERVICE_UNAVAILABLE"
-  | "GATEWAY_TIMEOUT";
+import { ErrorCode } from "@/types/auth";
 
 /**
  * ===============================================
@@ -31,10 +10,17 @@ type ErrorCode =
  * ===============================================
  */
 type ErrorMessageType = {
-  readonly [K in ErrorCode]?: Readonly<Record<string, string | number | {
-    message: string;
-    error: string;
-  }>>;
+  readonly [K in ErrorCode]?: Readonly<
+    Record<
+      string,
+      | string
+      | number
+      | {
+          message: string;
+          error: string;
+        }
+    >
+  >;
 };
 
 /**
@@ -87,20 +73,23 @@ export const errors = {
 
     MISSING_SUB_OR_ROLE: {
       message: "JWT is missing required subject (sub) or role claim",
-      error: "missing_sub_or_role"
+      error: "missing_sub_or_role",
     },
 
     MISSING_API_KEY: {
-      message: "Authentication information api key or api secret is required to continue.",
+      message:
+        "Authentication information api key or api secret is required to continue.",
       error: "Missing required authentication api key or api secret headers",
     },
 
     INVALID_API_KEY: {
-      message: "The authentication information api key or api secret provided is not valid.",
+      message:
+        "The authentication information api key or api secret provided is not valid.",
       error: "Invalid authentication api key or api secret header values",
     },
     INVALID_API_SECRET: {
-      message: "The authentication information api secret provided is not valid.",
+      message:
+        "The authentication information api secret provided is not valid.",
       error: "Invalid authentication api secret header values",
     },
   },
@@ -129,14 +118,11 @@ export const errors = {
       message: "One or more log entries have an invalid format.",
       error: "Invalid log format",
     },
-
-
   },
 
   FORBIDDEN: {
     httpCode: 403,
-    MESSAGE:
-      "You do not have permission to access the requested resource.",
+    MESSAGE: "You do not have permission to access the requested resource.",
 
     DETAIL: "Insufficient access",
 
@@ -148,13 +134,13 @@ export const errors = {
 
   NOT_FOUND: {
     httpCode: 404,
-    MESSAGE:
-      "The requested resource could not be found.",
+    MESSAGE: "The requested resource could not be found.",
 
     DETAIL: "Resource not found",
 
     RESOURCE_NOT_FOUND: {
-      message: "The requested resource does not exist or is no longer available.",
+      message:
+        "The requested resource does not exist or is no longer available.",
       error: "The requested resource does not exist",
     },
   },
@@ -164,49 +150,38 @@ export const errors = {
     MESSAGE:
       "The request could not be completed due to a conflict with the current state of the resource.",
 
-    DETAIL:
-      "A database conflict occurred while processing the request.",
+    DETAIL: "A database conflict occurred while processing the request.",
 
     DATABASE_CONFLICT: {
-      message:
-        "The operation could not be completed due to a data conflict.",
-      error:
-        "Database conflict error",
+      message: "The operation could not be completed due to a data conflict.",
+      error: "Database conflict error",
     },
 
     DUPLICATE_RECORD: {
-      message:
-        "A record with the same details already exists.",
-      error:
-        "Duplicate record constraint violation",
+      message: "A record with the same details already exists.",
+      error: "Duplicate record constraint violation",
     },
 
     FOREIGN_KEY_VIOLATION: {
       message:
         "This operation cannot be completed because related data exists.",
-      error:
-        "Foreign key constraint violation",
+      error: "Foreign key constraint violation",
     },
 
     INVALID_STATE: {
       message:
         "The request cannot be processed in the current state of the resource.",
-      error:
-        "Invalid resource state",
+      error: "Invalid resource state",
     },
 
     BUSINESS_RULE_VIOLATION: {
-      message:
-        "The operation violates a business rule defined in the system.",
-      error:
-        "Business rule violation",
+      message: "The operation violates a business rule defined in the system.",
+      error: "Business rule violation",
     },
 
     CONCURRENCY_CONFLICT: {
-      message:
-        "The resource was modified by another process. Please retry.",
-      error:
-        "Concurrency conflict detected",
+      message: "The resource was modified by another process. Please retry.",
+      error: "Concurrency conflict detected",
     },
   },
 
@@ -252,7 +227,8 @@ export const errors = {
 
   UNSUPPORTED_MEDIA_TYPE: {
     httpCode: 415,
-    MESSAGE: "The server refuses to accept the request because the payload format is in an unsupported format.",
+    MESSAGE:
+      "The server refuses to accept the request because the payload format is in an unsupported format.",
     DETAIL: "Unsupported media type",
 
     INVALID_CONTENT_TYPE: {
@@ -272,7 +248,8 @@ export const errors = {
 
   UNPROCESSABLE_CONTENT: {
     httpCode: 422,
-    MESSAGE: "The server understands the request method, and the request entity is correct, but the server was unable to process it.",
+    MESSAGE:
+      "The server understands the request method, and the request entity is correct, but the server was unable to process it.",
     DETAIL: "Unprocessable entity",
 
     VALIDATION_FAILED: {
@@ -292,7 +269,8 @@ export const errors = {
 
   PRECONDITION_REQUIRED: {
     httpCode: 428,
-    MESSAGE: "The server cannot process the request because a required precondition header is missing.",
+    MESSAGE:
+      "The server cannot process the request because a required precondition header is missing.",
     DETAIL: "Precondition required",
 
     // new
@@ -308,7 +286,8 @@ export const errors = {
 
   TOO_MANY_REQUESTS: {
     httpCode: 429,
-    MESSAGE: "The rate limit has been exceeded or too many requests are being sent to the server.",
+    MESSAGE:
+      "The rate limit has been exceeded or too many requests are being sent to the server.",
     DETAIL: "Too many requests",
 
     RATE_LIMIT_EXCEEDED: {
@@ -344,8 +323,7 @@ export const errors = {
 
   INTERNAL_SERVER_ERROR: {
     httpCode: 500,
-    MESSAGE:
-      "An unexpected error occurred while processing your request.",
+    MESSAGE: "An unexpected error occurred while processing your request.",
     DETAIL: "Internal server error",
 
     SERVER_ERROR: {
@@ -353,12 +331,14 @@ export const errors = {
       error: "Something went wrong on the server",
     },
     TOKEN_SIGNING_FAILED: {
-      message: "Failed to generate authentication token due to an internal error.",
-      error: "Token signing failed"
+      message:
+        "Failed to generate authentication token due to an internal error.",
+      error: "Token signing failed",
     },
     TOKEN_VERIFICATION_FAILED: {
-      message: "Failed to validate authentication token due to an internal error.",
-      error: "Token verification failed"
+      message:
+        "Failed to validate authentication token due to an internal error.",
+      error: "Token verification failed",
     },
     DATABASE_ERROR: {
       message: "A database error occurred while processing the request.",
@@ -366,7 +346,8 @@ export const errors = {
     },
 
     DB_PERMISSION_DENIED: {
-      message: "The server does not have permission to access required database resources.",
+      message:
+        "The server does not have permission to access required database resources.",
       error: "Database permission denied",
     },
     DB_CONNECTION_ERROR: {
@@ -386,7 +367,8 @@ export const errors = {
 
   NOT_IMPLEMENTED: {
     httpCode: 501,
-    MESSAGE: "The server does not support the functionality required to fulfill the request.",
+    MESSAGE:
+      "The server does not support the functionality required to fulfill the request.",
     DETAIL: "Not implemented",
 
     FEATURE_NOT_ENABLED: {
@@ -401,7 +383,8 @@ export const errors = {
 
   BAD_GATEWAY: {
     httpCode: 502,
-    MESSAGE: "The server received an invalid response from the upstream server.",
+    MESSAGE:
+      "The server received an invalid response from the upstream server.",
     DETAIL: "Bad gateway",
 
     UPSTREAM_UNAVAILABLE: {
@@ -425,7 +408,8 @@ export const errors = {
     },
 
     OVERLOADED: {
-      message: "The server is temporarily overloaded and cannot handle the request.",
+      message:
+        "The server is temporarily overloaded and cannot handle the request.",
       error: "Server overloaded",
     },
     CIRCUIT_OPEN: {
@@ -436,11 +420,13 @@ export const errors = {
 
   GATEWAY_TIMEOUT: {
     httpCode: 504,
-    MESSAGE: "The server did not get a response in time from the upstream server.",
+    MESSAGE:
+      "The server did not get a response in time from the upstream server.",
     DETAIL: "Gateway timeout",
 
     UPSTREAM_TIMEOUT: {
-      message: "The upstream service did not respond within the timeout period.",
+      message:
+        "The upstream service did not respond within the timeout period.",
       error: "Upstream timeout",
     },
     DNS_RESOLUTION_TIMEOUT: {
@@ -451,7 +437,8 @@ export const errors = {
 
   PAYMENT_REQUIRED: {
     httpCode: 402,
-    MESSAGE: "The client request requires payment to access the requested resource.",
+    MESSAGE:
+      "The client request requires payment to access the requested resource.",
     DETAIL: "Payment required",
     SUBSCRIPTION_EXPIRED: {
       message: "Your subscription has expired. Please renew to continue.",
@@ -461,7 +448,8 @@ export const errors = {
 
   METHOD_NOT_SUPPORTED: {
     httpCode: 405,
-    MESSAGE: "The server knows the request method, but the target resource doesn't support this method.",
+    MESSAGE:
+      "The server knows the request method, but the target resource doesn't support this method.",
     DETAIL: "Method not allowed",
     METHOD_NOT_ALLOWED: {
       message: "The HTTP method used is not supported for this endpoint.",
@@ -478,12 +466,11 @@ export const errors = {
       error: "Request timed out",
     },
   },
-
 } as const satisfies ErrorMessageType;
 
 /**
  * ===============================================
- * Custom error 
+ * Custom error
  * ===============================================
  */
 
@@ -497,13 +484,9 @@ export class MyError extends Error {
   error: string;
   httpCode: number;
 
-  constructor(input: {
-    code: ErrorCode;
-    message: string;
-    error: string;
-  }) {
+  constructor(input: { code: ErrorCode; message: string; error: string }) {
     super(input.message);
-    this.name = 'MyError';
+    this.name = "MyError";
 
     this.code = input.code;
     this.error = input.error;
@@ -521,57 +504,61 @@ export class MyError extends Error {
  */
 
 type ErrorRef = {
-  code: keyof typeof errors
-  subKey: string | string[]   // single or multiple sub-keys
-}
+  code: keyof typeof errors;
+  subKey: string | string[]; // single or multiple sub-keys
+};
 
 export function errorResponses(refs: ErrorRef[]) {
-  const res: Record<number, z.ZodObject<z.ZodRawShape>> = {}
+  const res: Record<number, z.ZodObject<z.ZodRawShape>> = {};
 
   refs.forEach(({ code, subKey }) => {
-    const entry = errors[code]
-    if (!entry) return
+    const entry = errors[code];
+    if (!entry) return;
 
-    const httpCode = entry.httpCode ?? 500
+    const httpCode = entry.httpCode ?? 500;
 
-    const subKeys = Array.isArray(subKey) ? subKey : [subKey]
+    const subKeys = Array.isArray(subKey) ? subKey : [subKey];
 
-    const messageValues: string[] = []
-    const errorValues: string[] = []
+    const messageValues: string[] = [];
+    const errorValues: string[] = [];
 
-    subKeys.forEach(sk => {
-      const sub = (entry as Record<string, unknown>)[sk]
+    subKeys.forEach((sk) => {
+      const sub = (entry as Record<string, unknown>)[sk];
       if (
         sub &&
-        typeof sub === 'object' &&
+        typeof sub === "object" &&
         sub !== null &&
-        'message' in sub &&
-        'error' in sub &&
-        typeof sub.message === 'string' &&
-        typeof sub.error === 'string'
+        "message" in sub &&
+        "error" in sub &&
+        typeof sub.message === "string" &&
+        typeof sub.error === "string"
       ) {
-        messageValues.push(sub.message)
-        errorValues.push(sub.error)
+        messageValues.push(sub.message);
+        errorValues.push(sub.error);
       }
-    })
+    });
 
-    if (messageValues.length === 0) return
+    if (messageValues.length === 0) return;
 
-    const schema = z.object({
-      success: z.literal(false),
-      httpCode: z.literal(httpCode),
-      code: z.literal(code),
-      message: messageValues.length === 1
-        ? z.literal(messageValues[0])
-        : z.enum(messageValues as [string, ...string[]]),
-      error: errorValues.length === 1
-        ? z.literal(errorValues[0])
-        : z.enum(errorValues as [string, ...string[]])
-    }).describe(code.replaceAll('_', ' '))
+    const schema = z
+      .object({
+        success: z.literal(false),
+        httpCode: z.literal(httpCode),
+        code: z.literal(code),
+        message:
+          messageValues.length === 1
+            ? z.literal(messageValues[0])
+            : z.enum(messageValues as [string, ...string[]]),
+        error:
+          errorValues.length === 1
+            ? z.literal(errorValues[0])
+            : z.enum(errorValues as [string, ...string[]]),
+      })
+      .describe(code.replaceAll("_", " "))
       .meta({
         examples: Object.fromEntries(
           subKeys.map((sk, i) => [
-            sk.replaceAll('_', ' '),
+            sk.replaceAll("_", " "),
             {
               value: {
                 success: false,
@@ -579,106 +566,104 @@ export function errorResponses(refs: ErrorRef[]) {
                 code: code,
                 message: messageValues[i],
                 error: errorValues[i],
-              }
-            }
-          ])
-        )
+              },
+            },
+          ]),
+        ),
       });
 
-    res[httpCode] = schema
-  })
+    res[httpCode] = schema;
+  });
 
-  return res
+  return res;
 }
 
 // ===============================================
 // api responses helper fun
 // ===============================================
 
-type SubEntry = { message: string; error: string }
+type SubEntry = { message: string; error: string };
 
 type ErrorCatalogEntry = {
-  httpCode: number
-  MESSAGE?: string
-  DETAIL?: string
-} & Record<string, SubEntry | number | string | undefined>
+  httpCode: number;
+  MESSAGE?: string;
+  DETAIL?: string;
+} & Record<string, SubEntry | number | string | undefined>;
 
-
-type DetailResponseEntry = OpenAPIV3.ResponseObject
-
+type DetailResponseEntry = OpenAPIV3.ResponseObject;
 
 type ApiResponsesInput = {
-  success: Record<number, z.ZodTypeAny>
-  error: ErrorRef[]
-}
+  success: Record<number, z.ZodTypeAny>;
+  error: ErrorRef[];
+};
 
 type ZodWithMeta = z.ZodTypeAny & {
   def: {
     metadata?: {
-      examples?: object[]
-    }
-  }
-}
+      examples?: object[];
+    };
+  };
+};
 
-export function apiResponses({ success, error }: ApiResponsesInput): Record<number, DetailResponseEntry> {
-  const detailResponses: Record<number, DetailResponseEntry> = {}
+export function apiResponses({
+  success,
+  error,
+}: ApiResponsesInput): Record<number, DetailResponseEntry> {
+  const detailResponses: Record<number, DetailResponseEntry> = {};
 
   // success
   Object.entries(success).forEach(([code, schema]) => {
-    const metaSchema = schema as ZodWithMeta
-    const zodExamples = metaSchema.def.metadata?.examples
+    const metaSchema = schema as ZodWithMeta;
+    const zodExamples = metaSchema.def.metadata?.examples;
 
     const examples = zodExamples
       ? Object.fromEntries(
-        zodExamples.map((ex, i) => [
-          `example-${i + 1}`,
-          { value: ex }
-        ])
-      )
-      : undefined
+          zodExamples.map((ex, i) => [`example-${i + 1}`, { value: ex }]),
+        )
+      : undefined;
 
     detailResponses[Number(code)] = {
       description: `Response for status ${code}`,
       content: {
-        'application/json': {
-          schema: { $ref: '#/components/schemas/SuccessResponse' },
+        "application/json": {
+          schema: { $ref: "#/components/schemas/SuccessResponse" },
           examples,
-        }
-      }
-    }
-  })
+        },
+      },
+    };
+  });
 
   // errors
   error.forEach(({ code, subKey }) => {
-    const entry = errors[code] as ErrorCatalogEntry
-    if (!entry) return
+    const entry = errors[code] as ErrorCatalogEntry;
+    if (!entry) return;
 
-    const httpCode = entry.httpCode ?? 500
-    const subKeys = Array.isArray(subKey) ? subKey : [subKey]
+    const httpCode = entry.httpCode ?? 500;
+    const subKeys = Array.isArray(subKey) ? subKey : [subKey];
 
-    const messageValues: string[] = []
-    const errorValues: string[] = []
+    const messageValues: string[] = [];
+    const errorValues: string[] = [];
 
-    subKeys.forEach(sk => {
-      const sub = entry[sk]
+    subKeys.forEach((sk) => {
+      const sub = entry[sk];
       if (
         sub !== null &&
-        typeof sub === 'object' &&
-        'message' in sub &&
-        'error' in sub &&
-        typeof sub.message === 'string' &&
-        typeof sub.error === 'string'
+        typeof sub === "object" &&
+        "message" in sub &&
+        "error" in sub &&
+        typeof sub.message === "string" &&
+        typeof sub.error === "string"
       ) {
-        messageValues.push(sub.message)
-        errorValues.push(sub.error)
+        messageValues.push(sub.message);
+        errorValues.push(sub.error);
       }
-    })
+    });
 
-    if (messageValues.length === 0) return
+    if (messageValues.length === 0) return;
 
     const examples = Object.fromEntries(
       subKeys.map((sk, i) => [
-        sk.replaceAll('_', ' '),
+        sk.replaceAll("_", " "),
         {
           value: {
             success: false,
@@ -686,21 +671,24 @@ export function apiResponses({ success, error }: ApiResponsesInput): Record<numb
             code,
             message: messageValues[i],
             error: errorValues[i],
-          }
-        }
-      ])
-    )
+          },
+        },
+      ]),
+    );
 
     detailResponses[httpCode] = {
-      description: typeof entry.DETAIL === 'string' ? entry.DETAIL : code.replaceAll('_', ' '),
+      description:
+        typeof entry.DETAIL === "string"
+          ? entry.DETAIL
+          : code.replaceAll("_", " "),
       content: {
-        'application/json': {
-          schema: { $ref: '#/components/schemas/ErrorResponse' },
+        "application/json": {
+          schema: { $ref: "#/components/schemas/ErrorResponse" },
           examples,
-        }
-      }
-    }
-  })
+        },
+      },
+    };
+  });
 
-  return detailResponses
+  return detailResponses;
 }
