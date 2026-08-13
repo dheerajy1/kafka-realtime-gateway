@@ -151,7 +151,7 @@ vite.config.ts.timestamp-*
 .vercel
 .vscode
 SUMMARY.md
-
+logs
 # ESLint
 .eslintcache
 

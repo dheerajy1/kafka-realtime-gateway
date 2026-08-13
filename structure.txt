@@ -26,6 +26,9 @@
 │   ├── Dockerfile
 │   └── docker-compose.yml
 ├── eslint.config.js
+├── logs/
+│   ├── test-logs-1.md
+│   └── test-logs-2-success.md
 ├── package.json
 ├── public/
 │   ├── favicon.ico
@@ -112,4 +115,4 @@
 │   └── ws-test5.ts
 └── tsconfig.json
 
-25 directories, 86 files
+26 directories, 88 files

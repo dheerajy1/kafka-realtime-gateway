@@ -294,11 +294,11 @@ describe("no-subscriber wait (controlled, no throw-to-restart)", () => {
 });
 
 describe("record-log-ingest ACK-required classification", () => {
-  test("isAckRequiredTopic includes ingest and status", async () => {
+  test("isAckRequiredTopic includes ingest, status, and committed", async () => {
     const { isAckRequiredTopic } = await import("@/lib/kafka-ws-bridge");
     expect(isAckRequiredTopic("record-log-ingest")).toBe(true);
     expect(isAckRequiredTopic("record-log-status")).toBe(true);
-    expect(isAckRequiredTopic("record-log-committed")).toBe(false);
+    expect(isAckRequiredTopic("record-log-committed")).toBe(true);
     expect(isAckRequiredTopic("some-other-topic")).toBe(false);
   });
 
@@ -355,6 +355,80 @@ describe("record-log-ingest ACK-required classification", () => {
     });
 
     unregisterWs(2);
+    expect(_testHasPendingAck(CORR)).toBe(false);
+    await expect(ackPromise).rejects.toThrow(/disconnected/);
+  });
+});
+
+
+describe("record-log-committed ACK-required classification", () => {
+  test("isAckRequiredTopic includes committed", async () => {
+    const { isAckRequiredTopic } = await import("@/lib/kafka-ws-bridge");
+    expect(isAckRequiredTopic("record-log-committed")).toBe(true);
+    expect(isAckRequiredTopic("record-log-ingest")).toBe(true);
+    expect(isAckRequiredTopic("record-log-status")).toBe(true);
+  });
+
+  test("committed pending ACK: wrong owner rejected, owner ACKs", async () => {
+    registerWs(1, {
+      send() {},
+      data: {
+        subscriptions: new Set(["record-log-committed"]),
+        subscriberId: 1,
+        clientId: "postgresql-read-model-subscriber",
+      },
+    });
+    registerWs(99, {
+      send() {},
+      data: {
+        subscriptions: new Set(["record-log-committed"]),
+        subscriberId: 99,
+        clientId: "other",
+      },
+    });
+
+    const ackPromise = registerPendingAck({
+      topic: "record-log-committed",
+      partition: 0,
+      offset: "55",
+      correlationId: CORR2,
+      subscriberId: 1,
+      clientId: "postgresql-read-model-subscriber",
+    });
+
+    expect(_testHasPendingAck(CORR2)).toBe(true);
+
+    const bad = await commitByCorrelationId(CORR2, 99);
+    expect(bad.ok).toBe(false);
+    expect(_testHasPendingAck(CORR2)).toBe(true);
+
+    markPendingDelivered(CORR2);
+    const good = await commitByCorrelationId(CORR2, 1);
+    expect(good.ok).toBe(true);
+    await expect(ackPromise).resolves.toBeUndefined();
+    expect(_testHasPendingAck(CORR2)).toBe(false);
+  });
+
+  test("committed disconnect clears pending (no commit path)", async () => {
+    registerWs(3, {
+      send() {},
+      data: {
+        subscriptions: new Set(["record-log-committed"]),
+        subscriberId: 3,
+        clientId: "postgresql-read-model-subscriber",
+      },
+    });
+
+    const ackPromise = registerPendingAck({
+      topic: "record-log-committed",
+      partition: 2,
+      offset: "9",
+      correlationId: CORR,
+      subscriberId: 3,
+      clientId: "postgresql-read-model-subscriber",
+    });
+
+    unregisterWs(3);
     expect(_testHasPendingAck(CORR)).toBe(false);
     await expect(ackPromise).rejects.toThrow(/disconnected/);
   });
