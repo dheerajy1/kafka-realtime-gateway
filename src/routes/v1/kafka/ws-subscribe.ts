@@ -9,33 +9,10 @@ import {
 } from "@/lib/kafka-ws-bridge";
 import {
   handleSubscriberPublish,
-  WsPublishCommandSchema,
 } from "@/lib/ws-subscriber-publish";
 import { apiKeyAuth } from "@/middleware/auth";
+import { MessageSchema } from "@/types/ws-subscribe";
 import { Elysia } from "elysia";
-import z from "zod";
-
-const SubscribeSchema = z.object({
-  type: z.literal("subscribe"),
-  topic: z.string().min(1),
-});
-
-const UnsubscribeSchema = z.object({
-  type: z.literal("unsubscribe"),
-  topic: z.string().min(1),
-});
-
-const ProcessedSchema = z.object({
-  type: z.literal("processed"),
-  correlationId: z.uuid({ version: "v7" }),
-});
-
-const MessageSchema = z.union([
-  SubscribeSchema,
-  UnsubscribeSchema,
-  ProcessedSchema,
-  WsPublishCommandSchema,
-]);
 
 const topicSubscribers = new Map<string, Set<number>>();
 
