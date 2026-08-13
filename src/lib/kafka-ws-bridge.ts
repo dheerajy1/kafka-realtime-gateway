@@ -1,7 +1,13 @@
 import { kafka } from "@/lib/kafka.config";
-import { z } from "zod";
 import { isoNowIST } from "@/lib/isoNowIST";
 import { env } from "@/lib/env";
+import {
+  GatewayWS,
+  KafkaMsgValSchema,
+  PendingAck,
+  SubscriberWaitCtx,
+} from "@/types/kafka-ws-bridge";
+import { sleep } from "bun";
 
 const ACK_REQUIRED_TOPICS = new Set<string>([
   "record-log-ingest",
@@ -13,68 +19,9 @@ export function isAckRequiredTopic(topic: string): boolean {
   return ACK_REQUIRED_TOPICS.has(topic);
 }
 
-const baseMsgSchema = z.object({
-  correlationId: z.uuid({ version: "v7" }).min(1, "Correlation ID is required"),
-  topic: z.string().min(1, "Topic is required"),
-  jobName: z.string().min(1, "Job name is required"),
-  clientRequestId: z.string().min(1, "Client Request ID is required"),
-  timestamp: z.string().min(1, "Timestamp is required"),
-  apiUserId: z.number().int().positive().optional(),
-  sequence: z.number().nullable().optional(),
-});
-
-const ingestMsgSchema = baseMsgSchema.extend({
-  eventType: z.literal("ingest"),
-  records: z.array(z.string()).min(1, "At least one record is required"),
-  username: z.string().nullable().optional(),
-  role: z.string().nullable().optional(),
-});
-
-const statusMsgSchema = baseMsgSchema.extend({
-  eventType: z.literal("status"),
-  stage: z.string().optional(),
-  status: z.string().optional(),
-  details: z.record(z.string(), z.unknown()).optional(),
-});
-
-const committedMsgSchema = baseMsgSchema.extend({
-  eventType: z.literal("committed"),
-  records: z.array(z.string()).min(1, "At least one record is required").optional(),
-  username: z.string().nullable().optional(),
-  role: z.string().nullable().optional(),
-  details: z.record(z.string(), z.unknown()).optional(),
-});
-
-const KafkaMsgValSchema = z.discriminatedUnion("eventType", [
-  ingestMsgSchema,
-  statusMsgSchema,
-  committedMsgSchema,
-]);
-
-export interface GatewayWS {
-  send(data: string | Record<string, unknown>): void;
-  data: {
-    subscriptions: Set<string>;
-    subscriberId: number;
-    clientId?: string;
-  };
-}
+const pendingAcks = new Map<string, PendingAck>();
 
 export const wsClients = new Map<number, GatewayWS>();
-
-type PendingAck = {
-  topic: string;
-  partition: number;
-  offset: string;
-  correlationId: string;
-  subscriberId: number;
-  clientId?: string;
-  resolve: () => void;
-  reject: (err: Error) => void;
-  delivered: boolean;
-};
-
-const pendingAcks = new Map<string, PendingAck>();
 
 let _consumerRef: ReturnType<typeof kafka.consumer> | null = null;
 
@@ -215,17 +162,6 @@ function pickResponsibleSubscriber(
   candidates.sort((a, b) => a.id - b.id);
   return candidates[0]!;
 }
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-export type SubscriberWaitCtx = {
-  heartbeat: () => Promise<void>;
-  isRunning: () => boolean;
-  isStale: () => boolean;
-  intervalMs?: number;
-};
 
 export async function waitForResponsibleSubscriber(
   topic: string,
@@ -375,7 +311,10 @@ export async function startKafkaWsBridge() {
           continue;
         }
 
-        const { eventType, correlationId } = result.data;
+        const {
+          // eventType,
+          correlationId,
+        } = result.data;
 
         const requiresAck = isAckRequiredTopic(topic);
 

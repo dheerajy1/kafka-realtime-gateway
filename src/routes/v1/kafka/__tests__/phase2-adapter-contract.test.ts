@@ -7,6 +7,8 @@
  * Does not import recordlog-api. Does not require a live Kafka broker.
  */
 
+import type { KafkaProducerLike } from "@/lib/producer.kafka";
+
 const TEST_ENV: Record<string, string> = {
   JWT_SECRET: "test-jwt-secret-key-32chars!!",
   CLIENT_ID: "test-client-id",
@@ -81,7 +83,7 @@ function createMockProducer() {
 describe("Phase-2 HttpKafkaPublisher → Gateway /http-publish contract", () => {
   let mockKafka: ReturnType<typeof createMockProducer>;
   let app: { handle: (req: Request) => Promise<Response> };
-  let setProducer: (p: unknown) => void;
+  let setProducer: (mock: KafkaProducerLike | null) => void;
 
   beforeEach(async () => {
     mock.module("@/lib/db-scripts/fn-verify-api-key", () => ({
@@ -180,7 +182,7 @@ describe("Phase-2 HttpKafkaPublisher → Gateway /http-publish contract", () => 
           "x-api-secret": "valid-api-secret",
         },
         body: JSON.stringify(body),
-      })
+      }),
     );
 
     expect(res.status).toBe(202);
@@ -234,7 +236,7 @@ describe("Phase-2 HttpKafkaPublisher → Gateway /http-publish contract", () => 
           "x-api-secret": "valid-api-secret",
         },
         body: JSON.stringify(body),
-      })
+      }),
     );
 
     expect(res.status).toBe(202);

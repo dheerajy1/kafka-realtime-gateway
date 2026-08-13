@@ -11,8 +11,8 @@ import {
   _testPendingCount,
   shouldCommitAfterAck,
   waitForResponsibleSubscriber,
-  type GatewayWS,
 } from "@/lib/kafka-ws-bridge";
+import { GatewayWS } from "@/types/kafka-ws-bridge";
 
 const CORR = "01901234-5678-7abc-8def-0123456789ab";
 const CORR2 = "01901234-5678-7abc-8def-0123456789ac";

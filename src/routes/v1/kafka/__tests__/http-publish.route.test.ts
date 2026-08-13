@@ -2,6 +2,7 @@
  * Phase 3 — real Elysia route tests for POST /http-publish
  * Mocks Kafka producer and API-key verification (no DB / brokers required).
  */
+import type { KafkaProducerLike } from "@/lib/producer.kafka";
 
 const TEST_ENV: Record<string, string> = {
   JWT_SECRET: "test-jwt-secret-key-32chars!!",
@@ -82,7 +83,7 @@ function authHeaders(extra?: Record<string, string>): Record<string, string> {
 describe("POST /http-publish — event mode (Phase 3)", () => {
   let mockKafka: ReturnType<typeof createMockProducer>;
   let app: { handle: (req: Request) => Promise<Response> };
-  let setProducer: (p: unknown) => void;
+  let setProducer: (mock: KafkaProducerLike | null) => void;
   let isUuidV7: (v: string) => boolean;
 
   beforeEach(async () => {
@@ -302,7 +303,7 @@ describe("POST /http-publish — event mode (Phase 3)", () => {
 describe("POST /http-publish — legacy mode", () => {
   let mockKafka: ReturnType<typeof createMockProducer>;
   let app: { handle: (req: Request) => Promise<Response> };
-  let setProducer: (p: unknown) => void;
+  let setProducer: (mock: KafkaProducerLike | null) => void;
 
   beforeEach(async () => {
     mock.module("@/lib/db-scripts/fn-verify-api-key", () => ({
@@ -396,7 +397,7 @@ describe("POST /http-publish — legacy mode", () => {
 describe("POST /http-publish — authentication", () => {
   let mockKafka: ReturnType<typeof createMockProducer>;
   let app: { handle: (req: Request) => Promise<Response> };
-  let setProducer: (p: unknown) => void;
+  let setProducer: (mock: KafkaProducerLike | null) => void;
 
   beforeEach(async () => {
     mock.module("@/lib/db-scripts/fn-verify-api-key", () => ({
@@ -426,7 +427,9 @@ describe("POST /http-publish — authentication", () => {
 
     app = new Elysia()
       .error({ MyError })
-      .onError(({ error, status, code }) => {
+      .onError(({ error, status, 
+        // code 
+      }) => {
         if (error instanceof MyError) {
           return status(error.httpCode, {
             success: false,

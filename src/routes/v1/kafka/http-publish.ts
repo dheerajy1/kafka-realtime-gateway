@@ -1,4 +1,3 @@
-import { isoNowIST } from "@/lib/isoNowIST";
 import { getProducer } from "@/lib/producer.kafka";
 import { isUuidV7 } from "@/pipeline-state-consumer/lib/events";
 import { MyError, errors } from "@/lib/errors";

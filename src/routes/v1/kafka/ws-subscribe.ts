@@ -5,12 +5,12 @@ import {
   registerWs,
   unregisterWs,
   wsClients,
-  type GatewayWS,
 } from "@/lib/kafka-ws-bridge";
 import {
   handleSubscriberPublish,
 } from "@/lib/ws-subscriber-publish";
 import { apiKeyAuth } from "@/middleware/auth";
+import { GatewayWS } from "@/types/kafka-ws-bridge";
 import { MessageSchema } from "@/types/ws-subscribe";
 import { Elysia } from "elysia";
 

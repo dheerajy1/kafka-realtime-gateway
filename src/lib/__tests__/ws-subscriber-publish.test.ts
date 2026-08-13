@@ -2,10 +2,10 @@ import { describe, expect, test, beforeEach } from "bun:test";
 import {
   handleSubscriberPublish,
   isSubscriberPublishAllowed,
-  WsPublishCommandSchema,
   SUBSCRIBER_PUBLISH_ALLOWLIST,
 } from "@/lib/ws-subscriber-publish";
 import { setProducer } from "@/lib/producer.kafka";
+import { WsPublishCommandSchema } from "@/types/ws-subscribe";
 
 const REQ = "01901234-5678-7abc-8def-0123456789aa";
 
