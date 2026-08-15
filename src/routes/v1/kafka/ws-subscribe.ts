@@ -6,12 +6,10 @@ import {
   unregisterWs,
   wsClients,
 } from "@/lib/kafka-ws-bridge";
-import {
-  handleSubscriberPublish,
-} from "@/lib/ws-subscriber-publish";
+import { handleSubscriberPublish } from "@/lib/ws-subscriber-publish";
 import { apiKeyAuth } from "@/middleware/auth";
-import { GatewayWS } from "@/types/kafka-ws-bridge";
-import { MessageSchema } from "@/types/ws-subscribe";
+import { GatewayWS } from "@/types/kafka-ws-bridge.types";
+import { MessageSchema } from "@/types/ws-subscribe.types";
 import { Elysia } from "elysia";
 
 const topicSubscribers = new Map<string, Set<number>>();

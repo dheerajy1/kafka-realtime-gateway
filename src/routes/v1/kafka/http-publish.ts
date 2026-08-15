@@ -1,22 +1,20 @@
-import { getProducer } from "@/lib/producer.kafka";
-import { isUuidV7 } from "@/pipeline-state-consumer/lib/events";
 import { MyError, errors } from "@/lib/errors";
+import { getProducer } from "@/lib/producer.kafka";
 import { apiKeyAuth } from "@/middleware/auth";
+import { requestBodySchema } from "@/types/http-publish.types";
 import { Elysia } from "elysia";
 import z from "zod";
-import { requestBodySchema } from "@/types/http-publish";
-
-/**
- * HTTP publish is event-only.
- * Caller generates UUIDv7.
- * Gateway validates UUIDv7.
- * Gateway forwards it unchanged.
- *
- * Request body:
- *   { topic, correlationId, event, eventType, jobName? }
- *   → key = correlationId, value = exact event JSON, correlationId never regenerated
- */
-
+/*
+ONE HTTP request
+       ↓
+Kafka Gateway
+       ↓
+RECEIVED
+       ↓
+record-log-ingest
+       ↓
+KAFKA_INGESTED
+*/
 export default new Elysia()
   .use(apiKeyAuth)
   .guard({ apiKey: true })
@@ -34,24 +32,50 @@ export default new Elysia()
         });
       }
 
-      const { correlationId, topic } = body;
-
-      if (!isUuidV7(correlationId)) {
-        throw new MyError({
-          code: "BAD_REQUEST",
-          message: errors.BAD_REQUEST.INVALID_INPUT.message,
-          error: "correlationId must be a valid UUIDv7",
-        });
-      }
-
       const producer = await getProducer();
 
       await producer.send({
-        topic,
+        topic: "record-log-status",
         messages: [
           {
-            key: correlationId,
+            key: body.correlationId,
+            value: JSON.stringify({
+              correlationId: body.correlationId,
+              stage: "RECEIVED",
+              status: "SUCCEEDED",
+              timestamp: body.timestamp,
+              details: {
+                message: "Request accepted by Kafka Gateway",
+              },
+            }),
+          },
+        ],
+      });
+
+      await producer.send({
+        topic: body.topic,
+        messages: [
+          {
+            key: body.correlationId,
             value: JSON.stringify(body),
+          },
+        ],
+      });
+
+      await producer.send({
+        topic: "record-log-status",
+        messages: [
+          {
+            key: body.correlationId,
+            value: JSON.stringify({
+              correlationId: body.correlationId,
+              stage: "KAFKA_INGESTED",
+              status: "SUCCEEDED",
+              timestamp: body.timestamp,
+              details: {
+                message: "Ingest event accepted by Kafka",
+              },
+            }),
           },
         ],
       });
@@ -61,8 +85,8 @@ export default new Elysia()
         statusCode: 202,
         message: "Event accepted",
         data: {
-          topic,
-          correlationId,
+          topic: body.topic,
+          correlationId: body.correlationId,
         },
       });
     },
@@ -81,9 +105,9 @@ export default new Elysia()
       },
       detail: {
         tags: ["Publish"],
-        summary: "HTTP publish event",
+        summary: "Publish record log ingest event",
         description:
-          "Publish via HTTP using API key auth. Event-only mode. Validates and forwards event unchanged.",
+          "Accepts one record-log ingest request and publishes the ingest event plus its Kafka observability status events.",
       },
     },
   );

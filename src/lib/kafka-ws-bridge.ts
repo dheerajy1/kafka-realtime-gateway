@@ -1,12 +1,12 @@
-import { kafka } from "@/lib/kafka.config";
-import { isoNowIST } from "@/lib/isoNowIST";
 import { env } from "@/lib/env";
+import { isoNowIST } from "@/lib/isoNowIST";
+import { kafka } from "@/lib/kafka.config";
 import {
   GatewayWS,
   KafkaMsgValSchema,
   PendingAck,
   SubscriberWaitCtx,
-} from "@/types/kafka-ws-bridge";
+} from "@/types/kafka-ws-bridge.types";
 import { sleep } from "bun";
 
 const ACK_REQUIRED_TOPICS = new Set<string>([
@@ -155,10 +155,6 @@ function pickResponsibleSubscriber(
     }
   }
   if (candidates.length === 0) return null;
-  const preferred = candidates.find(
-    (c) => c.ws.data.clientId === "pipeline-state-consumer",
-  );
-  if (preferred) return preferred;
   candidates.sort((a, b) => a.id - b.id);
   return candidates[0]!;
 }
@@ -289,32 +285,50 @@ export async function startKafkaWsBridge() {
           continue;
         }
 
+        /**
+         * Delivery payload: prefer full KafkaMsgValSchema; fall back to any
+         * object with a UUIDv7 correlationId (worker pipeline events).
+         * Kafka batch `topic` is always attached on the WS event frame for demux.
+         */
         const result = KafkaMsgValSchema.safeParse(parsedJson);
+        let correlationId: string;
+        let eventPayload: Record<string, unknown>;
 
-        if (!result.success) {
-          console.log(
-            `${isoNowIST()}\t[WsBridge:Error]\tINVALID MESSAGE topic=${topic} partition=${partition} offset=${message.offset} issues=${JSON.stringify(result.error.issues)}`,
-          );
+        if (result.success) {
+          correlationId = result.data.correlationId;
+          eventPayload = { ...result.data };
+        } else {
+          const loose = parsedJson as Record<string, unknown> | null;
+          const cid =
+            loose &&
+            typeof loose === "object" &&
+            typeof loose.correlationId === "string"
+              ? loose.correlationId
+              : null;
+          const uuidV7 =
+            /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+          if (!cid || !uuidV7.test(cid)) {
+            console.log(
+              `${isoNowIST()}\t[WsBridge:Error]\tINVALID MESSAGE topic=${topic} partition=${partition} offset=${message.offset} issues=${JSON.stringify(result.error.issues)}`,
+            );
 
-          resolveOffset(message.offset);
+            resolveOffset(message.offset);
 
-          await consumer.commitOffsets([
-            {
-              topic,
-              partition,
-              offset: (BigInt(message.offset) + 1n).toString(),
-            },
-          ]);
+            await consumer.commitOffsets([
+              {
+                topic,
+                partition,
+                offset: (BigInt(message.offset) + 1n).toString(),
+              },
+            ]);
 
-          await heartbeat();
+            await heartbeat();
 
-          continue;
+            continue;
+          }
+          correlationId = cid;
+          eventPayload = { ...loose };
         }
-
-        const {
-          // eventType,
-          correlationId,
-        } = result.data;
 
         const requiresAck = isAckRequiredTopic(topic);
 
@@ -362,7 +376,8 @@ export async function startKafkaWsBridge() {
             ws.send(
               JSON.stringify({
                 type: "event",
-                ...result.data,
+                topic,
+                ...eventPayload,
               }),
             );
             delivered++;
@@ -402,7 +417,8 @@ export async function startKafkaWsBridge() {
           ws.send(
             JSON.stringify({
               type: "event",
-              ...result.data,
+              topic,
+              ...eventPayload,
             }),
           );
 

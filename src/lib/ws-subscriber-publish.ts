@@ -2,13 +2,13 @@
  * Subscriber → gateway Kafka publish (over the existing authenticated subscribe WS).
  * Gateway is the sole Kafka producer for these pipeline topics.
  */
-import { getProducer } from "@/lib/producer.kafka";
 import { isoNowIST } from "@/lib/isoNowIST";
+import { getProducer } from "@/lib/producer.kafka";
 import {
   PublishFailure,
   PublishSuccess,
   WsPublishCommand,
-} from "@/types/ws-subscribe";
+} from "@/types/ws-subscribe.types";
 
 /** Topics subscribers may publish via the subscribe WS. */
 export const SUBSCRIBER_PUBLISH_ALLOWLIST = new Set<string>([

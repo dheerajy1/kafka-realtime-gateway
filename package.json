@@ -6,11 +6,11 @@
   "scripts": {
     "dev": "bunx tailwindcss -i ./src/tailwind.css -o ./public/global.css && bun --env-file=.env.development --hot src/server.ts",
     "type-check": "tsc --noEmit",
+    "lint": "eslint . --cache --cache-location .eslintcache",
     "build": "bun run clean && bunx tailwindcss -i ./src/tailwind.css -o ./public/global.css && tsc && tsc-alias && cp -r public dist/public",
     "start": "bun --env-file=.env.production dist/server.js",
-    "lint": "eslint . --cache --cache-location .eslintcache",
     "clean": "rm -rf dist/* dist/.* || true",
-    "test": "bun test",
+    "test": "bun --env-file=.env.development test",
     "test:http-publish": "bun test src/routes/v1/kafka/__tests__",
     "hash": "bun src/scripts/hash.ts",
     "dev:pipeline-state-consumer": "bun --env-file=.env.development src/pipeline-state-consumer/main.ts",
