@@ -6,17 +6,55 @@ import {
   KafkaMsgValSchema,
   PendingAck,
   SubscriberWaitCtx,
-} from "@/types/kafka-ws-bridge.types";
+} from "@/schemas/kafka-ws-bridge.schema";
 import { sleep } from "bun";
 
 const ACK_REQUIRED_TOPICS = new Set<string>([
-  "record-log-ingest",
+  "record-log-ingest-write-model",
+  "record-log-ingest-read-model",
   "record-log-status",
-  "record-log-committed",
 ]);
+
+/**
+ * Record Log stage DLQ topics must remain Kafka-retained for inspection/reprocessing.
+ * The Gateway consumer must not subscribe to these topics.
+ */
+export const CONSUMER_EXCLUDED_TOPICS = new Set<string>([
+  "record-log-ingest-write-model-dlq",
+  "record-log-ingest-read-model-dlq",
+]);
+
+/** KafkaJS subscribe pattern: all non-internal topics except CONSUMER_EXCLUDED_TOPICS. */
+export const CONSUMER_TOPIC_PATTERN =
+  /^(?!__|record-log-ingest-write-model-dlq$|record-log-ingest-read-model-dlq$).+/;
 
 export function isAckRequiredTopic(topic: string): boolean {
   return ACK_REQUIRED_TOPICS.has(topic);
+}
+
+export function isConsumerExcludedTopic(topic: string): boolean {
+  return CONSUMER_EXCLUDED_TOPICS.has(topic);
+}
+
+function decodeKafkaHeaders(
+  headers: Record<string, unknown> | undefined | null,
+): Record<string, string> {
+  if (!headers || typeof headers !== "object") return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headers)) {
+    if (v == null) continue;
+    if (Buffer.isBuffer(v)) {
+      out[k] = v.toString("utf8");
+    } else if (typeof v === "string") {
+      out[k] = v;
+    } else if (Array.isArray(v) && v.length > 0) {
+      const first = v[0];
+      out[k] = Buffer.isBuffer(first) ? first.toString("utf8") : String(first);
+    } else {
+      out[k] = String(v);
+    }
+  }
+  return out;
 }
 
 const pendingAcks = new Map<string, PendingAck>();
@@ -228,7 +266,7 @@ export async function startKafkaWsBridge() {
   await consumer.connect();
 
   await consumer.subscribe({
-    topic: /^(?!__).*$/,
+    topic: CONSUMER_TOPIC_PATTERN,
   });
 
   await consumer.run({
@@ -242,6 +280,14 @@ export async function startKafkaWsBridge() {
       isStale,
     }) => {
       const { topic, partition, messages } = batch;
+
+      // Defense-in-depth: never process DLQ topics even if subscription drifts
+      if (isConsumerExcludedTopic(topic)) {
+        console.log(
+          `${isoNowIST()}\t[WsBridge:Log]\tSKIP_EXCLUDED_TOPIC topic=${topic} partition=${partition} messages=${messages.length}`,
+        );
+        return;
+      }
 
       for (const message of messages) {
         if (!isRunning() || isStale()) break;
@@ -261,7 +307,7 @@ export async function startKafkaWsBridge() {
 
           await heartbeat();
 
-          continue;
+          return;
         }
 
         let parsedJson: unknown;
@@ -282,7 +328,7 @@ export async function startKafkaWsBridge() {
             },
           ]);
           await heartbeat();
-          continue;
+          return;
         }
 
         /**
@@ -324,7 +370,7 @@ export async function startKafkaWsBridge() {
 
             await heartbeat();
 
-            continue;
+            return;
           }
           correlationId = cid;
           eventPayload = { ...loose };
@@ -365,7 +411,7 @@ export async function startKafkaWsBridge() {
             },
           ]);
           await heartbeat();
-          continue;
+          return;
         }
 
         if (!requiresAck) {
@@ -377,6 +423,11 @@ export async function startKafkaWsBridge() {
               JSON.stringify({
                 type: "event",
                 topic,
+                partition,
+                offset: message.offset,
+                headers: decodeKafkaHeaders(
+                  message.headers as Record<string, unknown> | undefined,
+                ),
                 ...eventPayload,
               }),
             );
@@ -399,7 +450,7 @@ export async function startKafkaWsBridge() {
 
           await heartbeat();
 
-          continue;
+          return;
         }
 
         const ackPromise = registerPendingAck({
@@ -418,6 +469,11 @@ export async function startKafkaWsBridge() {
             JSON.stringify({
               type: "event",
               topic,
+              partition,
+              offset: message.offset,
+              headers: decodeKafkaHeaders(
+                message.headers as Record<string, unknown> | undefined,
+              ),
               ...eventPayload,
             }),
           );

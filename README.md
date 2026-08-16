@@ -1,4 +1,41 @@
 # kafka-realtime-gateway
+
+## HTTP publish contract (`POST /api/v1/http-publish`)
+
+Generic Kafka HTTP publishing endpoint. The gateway does **not** contain Record Log (or any other domain) knowledge.
+
+### Request
+
+```json
+{
+  "topic": "string (min 1)",
+  "correlationId": "UUIDv7",
+  "value": "unknown (any JSON value)"
+}
+```
+
+- Kafka message key = `correlationId`
+- Kafka message value = `JSON.stringify(value)`
+- Topic is taken exactly from the request (no hardcoding)
+
+### Success response (202)
+
+```json
+{
+  "success": true,
+  "statusCode": 202,
+  "message": "Event accepted",
+  "data": {
+    "topic": "string",
+    "correlationId": "UUIDv7"
+  }
+}
+```
+
+The gateway does **not** publish domain status events. Callers own domain semantics (including Record Log pipeline status).
+
+---
+
 kafka realtime gateway
 
 Good. Clear answer:
@@ -71,14 +108,6 @@ All commands are managed via `bun`.
 | `bun run test`                                   | `~/dev/vs-code/kafka-api-gateway`  | `bun run --cwd ~/dev/vs-code/kafka-api-gateway test`                                    | Runs the full test suite using Bun's native test runner.                                                 |
 | `bun run test:http-publish`                      | `~/dev/vs-code/kafka-api-gateway`  | `bun run --cwd ~/dev/vs-code/kafka-api-gateway test:http-publish`                       | Runs unit tests specifically for the Kafka HTTP publishing route.                                        |
 | `bun run hash 'apikeytohash'`                    | `~/dev/vs-code/kafka-api-gateway`  | `bun run --cwd ~/dev/vs-code/kafka-api-gateway hash -- 'apikeytohash'`                  | Hashes a raw API key string using bcrypt (cost: 12) and prints the result to stdout.                     |
-| `bun run dev:pipeline-state-consumer`            | `~/dev/vs-code/kafka-api-gateway`  | `bun run --cwd ~/dev/vs-code/kafka-api-gateway dev:pipeline-state-consumer`             | Runs the pipeline state consumer service directly in development mode.                                   |
-| `bun run compile:pipeline-state-consumer`        | `~/dev/vs-code/kafka-api-gateway`  | `bun run --cwd ~/dev/vs-code/kafka-api-gateway compile:pipeline-state-consumer`         | Compiles the pipeline state consumer into a standalone binary in `dist/`.                                |
-| `bun run start:pipeline-state-consumer:binary`   | `~/dev/vs-code/kafka-api-gateway`  | `bun run --cwd ~/dev/vs-code/kafka-api-gateway start:pipeline-state-consumer:binary`    | Directly executes the compiled `dist/pipeline-state-consumer` standalone binary.                         |
-| `bun run madge:pipeline-state-consumer`          | `~/dev/vs-code/kafka-api-gateway`  | `bun run --cwd ~/dev/vs-code/kafka-api-gateway madge:pipeline-state-consumer`           | Generates a text summary of dependency relationships for the pipeline state consumer entrypoint.         |
-| `bun run madge:pipeline-state-consumer:json`     | `~/dev/vs-code/kafka-api-gateway`  | `bun run --cwd ~/dev/vs-code/kafka-api-gateway madge:pipeline-state-consumer:json`      | Outputs the dependency graph for the pipeline state consumer entrypoint as a raw JSON object to stdout.  |
-| `bun run madge:pipeline-state-consumer:circular` | `~/dev/vs-code/kafka-api-gateway`  | `bun run --cwd ~/dev/vs-code/kafka-api-gateway madge:pipeline-state-consumer:circular`  | Scans the pipeline state consumer module graph and reports any circular dependency cycles found.         |
-| `bun run build:pipeline-state-consumer`          | `~/dev/vs-code/kafka-api-gateway`  | `bun run --cwd ~/dev/vs-code/kafka-api-gateway build:pipeline-state-consumer`           | Bundles the consumer entry point into a single JavaScript file (`dist/pipeline-state-consumer.js`).      |
-| `bun run start:pipeline-state-consumer`          | `~/dev/vs-code/kafka-api-gateway`  | `bun run --cwd ~/dev/vs-code/kafka-api-gateway start:pipeline-state-consumer`           | Executes the bundled `dist/pipeline-state-consumer.js` file using Bun.                                   |
 
 ### Docker Operations
 

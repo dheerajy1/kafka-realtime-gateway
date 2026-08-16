@@ -182,7 +182,6 @@ export const AuthErrorResponseSchema = z.object({
 
 export type AuthErrorResponse = z.infer<typeof AuthErrorResponseSchema>;
 
-
 // =========================
 // MISCELLANEOUS
 // =========================

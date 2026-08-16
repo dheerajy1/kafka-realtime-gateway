@@ -8,8 +8,8 @@ import {
 } from "@/lib/kafka-ws-bridge";
 import { handleSubscriberPublish } from "@/lib/ws-subscriber-publish";
 import { apiKeyAuth } from "@/middleware/auth";
-import { GatewayWS } from "@/types/kafka-ws-bridge.types";
-import { MessageSchema } from "@/types/ws-subscribe.types";
+import { GatewayWS } from "@/schemas/kafka-ws-bridge.schema";
+import { MessageSchema } from "@/schemas/ws-subscribe.schema";
 import { Elysia } from "elysia";
 
 const topicSubscribers = new Map<string, Set<number>>();

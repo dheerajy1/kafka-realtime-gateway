@@ -1,6 +1,6 @@
 import { Login } from "@/components/Login";
 import { getOnPremPool } from "@/lib/db";
-import { loginSchema } from "@/schemas/login";
+import { loginSchema } from "@/schemas/login.schema";
 import { Elysia } from "elysia";
 import React from "react";
 import { renderToReadableStream } from "react-dom/server";

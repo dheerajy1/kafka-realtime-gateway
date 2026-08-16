@@ -3,7 +3,11 @@ import { kafka } from "@/lib/kafka.config";
 export type KafkaProducerLike = {
   send: (payload: {
     topic: string;
-    messages: Array<{ key?: string | null; value: string }>;
+    messages: Array<{
+      key?: string | null;
+      value: string;
+      headers?: Record<string, Buffer | string>;
+    }>;
   }) => Promise<unknown>;
   connect?: () => Promise<void>;
 };

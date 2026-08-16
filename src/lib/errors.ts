@@ -1,6 +1,6 @@
+import { ErrorCode } from "@/schemas/auth.schema";
 import type { OpenAPIV3 } from "openapi-types";
 import z from "zod";
-import { ErrorCode } from "@/types/auth";
 
 /**
  * ===============================================

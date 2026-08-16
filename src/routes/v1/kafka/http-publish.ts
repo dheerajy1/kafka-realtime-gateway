@@ -1,20 +1,21 @@
 import { MyError, errors } from "@/lib/errors";
 import { getProducer } from "@/lib/producer.kafka";
 import { apiKeyAuth } from "@/middleware/auth";
-import { requestBodySchema } from "@/types/http-publish.types";
+import {
+  httpPublishRequestSchema,
+  httpPublishResponseSchema,
+} from "@/schemas/http-publish.schema";
 import { Elysia } from "elysia";
-import z from "zod";
-/*
-ONE HTTP request
-       ↓
-Kafka Gateway
-       ↓
-RECEIVED
-       ↓
-record-log-ingest
-       ↓
-KAFKA_INGESTED
-*/
+
+/**
+ * Generic Kafka HTTP publish endpoint.
+ *
+ * Authenticates the request, validates the transport envelope,
+ * publishes `value` to `topic` with Kafka key = correlationId,
+ * and returns a defined 202 response.
+ *
+ * No domain-specific status events or topic hardcoding.
+ */
 export default new Elysia()
   .use(apiKeyAuth)
   .guard({ apiKey: true })
@@ -35,54 +36,18 @@ export default new Elysia()
       const producer = await getProducer();
 
       await producer.send({
-        topic: "record-log-status",
-        messages: [
-          {
-            key: body.correlationId,
-            value: JSON.stringify({
-              correlationId: body.correlationId,
-              stage: "RECEIVED",
-              status: "SUCCEEDED",
-              timestamp: body.timestamp,
-              details: {
-                message: "Request accepted by Kafka Gateway",
-              },
-            }),
-          },
-        ],
-      });
-
-      await producer.send({
         topic: body.topic,
         messages: [
           {
             key: body.correlationId,
-            value: JSON.stringify(body),
-          },
-        ],
-      });
-
-      await producer.send({
-        topic: "record-log-status",
-        messages: [
-          {
-            key: body.correlationId,
-            value: JSON.stringify({
-              correlationId: body.correlationId,
-              stage: "KAFKA_INGESTED",
-              status: "SUCCEEDED",
-              timestamp: body.timestamp,
-              details: {
-                message: "Ingest event accepted by Kafka",
-              },
-            }),
+            value: JSON.stringify(body.value),
           },
         ],
       });
 
       return status(202, {
-        success: true,
-        statusCode: 202,
+        success: true as const,
+        statusCode: 202 as const,
         message: "Event accepted",
         data: {
           topic: body.topic,
@@ -91,23 +56,17 @@ export default new Elysia()
       });
     },
     {
-      body: requestBodySchema,
+      body: httpPublishRequestSchema,
       response: {
-        202: z.object({
-          success: z.literal(true),
-          statusCode: z.literal(202),
-          message: z.string(),
-          data: z.object({
-            topic: z.string(),
-            correlationId: z.string(),
-          }),
-        }),
+        202: httpPublishResponseSchema,
       },
       detail: {
         tags: ["Publish"],
-        summary: "Publish record log ingest event",
+        summary: "Publish a message to a Kafka topic",
         description:
-          "Accepts one record-log ingest request and publishes the ingest event plus its Kafka observability status events.",
+          "Accepts a generic transport envelope (topic, correlationId, value). " +
+          "Publishes the value to the supplied topic using correlationId as the Kafka message key. " +
+          "Returns 202 after Kafka acceptance. No domain-specific processing.",
       },
     },
   );

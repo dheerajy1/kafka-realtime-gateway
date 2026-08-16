@@ -1,4 +1,4 @@
-import { envSchema } from "@/types/env";
+import { envSchema } from "@/schemas/env.schema";
 
 let env: ReturnType<typeof envSchema.parse>;
 

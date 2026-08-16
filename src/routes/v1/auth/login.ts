@@ -2,7 +2,10 @@ import { jwtVal } from "@/lib/constants";
 import { getOnPremPool } from "@/lib/db";
 import { apiResponses, errors, MyError } from "@/lib/errors";
 import { NoAuth } from "@/middleware/auth";
-import { LoginResponseSchema, NoAuthHeadersSchema } from "@/types/auth";
+import {
+  LoginResponseSchema,
+  NoAuthHeadersSchema,
+} from "@/schemas/auth.schema";
 import { jwt } from "@elysiajs/jwt";
 import { Elysia } from "elysia";
 import z from "zod";
@@ -29,7 +32,7 @@ router.post(
       FROM api_users
       WHERE user_name = $1
       `,
-        [username],
+      [username],
     );
 
     if (rows.length === 0) {

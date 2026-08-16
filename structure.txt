@@ -20,7 +20,6 @@
 ├── CHANGELOG.md
 ├── LICENSE
 ├── README.md
-├── SUMMARY.md
 ├── bun.lock
 ├── docker/
 │   ├── Dockerfile
@@ -28,7 +27,8 @@
 ├── eslint.config.js
 ├── logs/
 │   ├── test-logs-1.md
-│   └── test-logs-2-success.md
+│   ├── test-logs-2-success.md
+│   └── test-logs-3-success.md
 ├── package.json
 ├── public/
 │   ├── favicon.ico
@@ -44,9 +44,6 @@
 │   │   └── Login.tsx
 │   ├── index.ts
 │   ├── lib/
-│   │   ├── __tests__/
-│   │   │   ├── kafka-ws-bridge-ack.test.ts
-│   │   │   └── ws-subscriber-publish.test.ts
 │   │   ├── constants.ts
 │   │   ├── db-scripts/
 │   │   │   ├── fn-create-api-key.ts
@@ -60,20 +57,10 @@
 │   │   ├── kafka-ws-bridge.ts
 │   │   ├── kafka.config.ts
 │   │   ├── producer.kafka.ts
-│   │   ├── ulid.ts
 │   │   └── ws-subscriber-publish.ts
 │   ├── middleware/
 │   │   ├── auth.ts
 │   │   └── server-gate.ts
-│   ├── pipeline-state-consumer/
-│   │   ├── __tests__/
-│   │   │   ├── events.test.ts
-│   │   │   └── processor.test.ts
-│   │   ├── lib/
-│   │   │   ├── events.ts
-│   │   │   ├── postgres.ts
-│   │   │   └── processor.ts
-│   │   └── main.ts
 │   ├── routes/
 │   │   ├── about.ts
 │   │   ├── healthz.ts
@@ -85,8 +72,7 @@
 │   │       ├── auth.router.ts
 │   │       ├── kafka/
 │   │       │   ├── __tests__/
-│   │       │   │   ├── http-publish.route.test.ts
-│   │       │   │   └── phase2-adapter-contract.test.ts
+│   │       │   │   └── http-publish.test.ts
 │   │       │   ├── http-publish.ts
 │   │       │   ├── ws-publish.ts
 │   │       │   └── ws-subscribe.ts
@@ -96,19 +82,17 @@
 │   │       ├── user.router.ts
 │   │       └── v1.router.ts
 │   ├── schemas/
-│   │   └── login.ts
+│   │   ├── api.schema.ts
+│   │   ├── auth.schema.ts
+│   │   ├── env.schema.ts
+│   │   ├── http-publish.schema.ts
+│   │   ├── kafka-ws-bridge.schema.ts
+│   │   ├── login.schema.ts
+│   │   └── ws-subscribe.schema.ts
 │   ├── scripts/
-│   │   ├── hash.ts
-│   │   └── kafka-api-gateway-pm2.config.cjs
+│   │   └── hash.ts
 │   ├── server.ts
-│   ├── tailwind.css
-│   └── types/
-│       ├── api.ts
-│       ├── auth.ts
-│       ├── env.ts
-│       ├── http-publish.ts
-│       ├── kafka-ws-bridge.ts
-│       └── ws-subscribe.ts
+│   └── tailwind.css
 ├── structure.txt
 ├── tests/
 │   ├── ws-test.ts
@@ -118,4 +102,4 @@
 │   └── ws-test5.ts
 └── tsconfig.json
 
-26 directories, 91 files
+21 directories, 80 files

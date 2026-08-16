@@ -15,10 +15,10 @@ export const ProcessedSchema = z.object({
   correlationId: z.uuid({ version: "v7" }),
 });
 
-
 /**
  * WS publish request (subscriber → gateway).
  * requestId correlates the command; do not overload pipeline correlationId.
+ * Optional headers are forwarded as Kafka message headers (retry/DLQ metadata).
  */
 export const WsPublishCommandSchema = z.object({
   type: z.literal("publish"),
@@ -27,6 +27,8 @@ export const WsPublishCommandSchema = z.object({
   key: z.string().min(1).optional(),
   /** Opaque event payload — forwarded as Kafka message value JSON. */
   value: z.record(z.string(), z.unknown()),
+  /** Optional Kafka headers (string values). */
+  headers: z.record(z.string(), z.string()).optional(),
 });
 
 export type WsPublishCommand = z.infer<typeof WsPublishCommandSchema>;
@@ -52,4 +54,3 @@ export const MessageSchema = z.union([
   ProcessedSchema,
   WsPublishCommandSchema,
 ]);
-

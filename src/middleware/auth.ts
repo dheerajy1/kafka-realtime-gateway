@@ -7,7 +7,7 @@ import {
   CtxAuthError,
   NoAuthHeadersSchema,
   apiKeyAuthHeadersSchema,
-} from "@/types/auth";
+} from "@/schemas/auth.schema";
 import { jwt } from "@elysiajs/jwt";
 import { Elysia } from "elysia";
 

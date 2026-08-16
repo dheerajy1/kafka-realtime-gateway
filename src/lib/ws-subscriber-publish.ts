@@ -8,11 +8,14 @@ import {
   PublishFailure,
   PublishSuccess,
   WsPublishCommand,
-} from "@/types/ws-subscribe.types";
+} from "@/schemas/ws-subscribe.schema";
 
-/** Topics subscribers may publish via the subscribe WS. */
+/** Topics subscribers may publish via the subscribe WS (including retries + DLQ). */
 export const SUBSCRIBER_PUBLISH_ALLOWLIST = new Set<string>([
-  "record-log-committed",
+  "record-log-ingest-write-model",
+  "record-log-ingest-write-model-dlq",
+  "record-log-ingest-read-model",
+  "record-log-ingest-read-model-dlq",
   "record-log-status",
 ]);
 
@@ -28,7 +31,7 @@ export async function handleSubscriberPublish(
   cmd: WsPublishCommand,
   meta: { subscriberId: number; clientId?: string },
 ): Promise<PublishSuccess | PublishFailure> {
-  const { requestId, topic, key, value } = cmd;
+  const { requestId, topic, key, value, headers } = cmd;
 
   if (!isSubscriberPublishAllowed(topic)) {
     console.log(
@@ -48,17 +51,24 @@ export async function handleSubscriberPublish(
 
   try {
     const producer = await getProducer();
+    const kafkaHeaders =
+      headers && Object.keys(headers).length > 0
+        ? Object.fromEntries(
+            Object.entries(headers).map(([k, v]) => [k, Buffer.from(v)]),
+          )
+        : undefined;
+
     const result = await producer.send({
       topic,
       messages: [
         {
           key: key ?? null,
           value: JSON.stringify(value),
+          headers: kafkaHeaders,
         },
       ],
     });
 
-    // KafkaJS returns RecordMetadata[] when available
     const meta0 =
       Array.isArray(result) && result.length > 0
         ? (result[0] as { partition?: number; offset?: string })
