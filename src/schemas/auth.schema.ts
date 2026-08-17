@@ -214,3 +214,19 @@ export type CtxAuthError = {
   message: string | null;
   error: string | null;
 };
+
+export interface ApiKeyAuthContext {
+  headers: Record<string, string | undefined>;
+  xApiKey: string;
+  apiUserId: number;
+  authError: CtxAuthError;
+}
+
+export interface WsSubscriberContext {
+  xSubscriberId: string;
+  subscriberId: number;
+  subscriptions: Set<string>;
+}
+
+// Combined context for WS routes using both middlewares
+export interface WsGatewayContext extends ApiKeyAuthContext, WsSubscriberContext {}

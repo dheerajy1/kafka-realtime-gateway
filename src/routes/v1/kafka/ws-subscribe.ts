@@ -2,14 +2,12 @@ import { isoNowIST } from "@/lib/isoNowIST";
 import {
   commitByCorrelationId,
   countPendingForSubscriber,
-  registerWs,
-  unregisterWs,
-  wsClients,
-} from "@/lib/kafka-ws-bridge";
+} from "@/lib/kafka-ws-bridge/pending-acks";
+import { wsClients } from "@/lib/kafka-ws-bridge/state";
+import { registerWs, unregisterWs } from "@/lib/kafka-ws-bridge/ws-registry";
 import { handleSubscriberPublish } from "@/lib/ws-subscriber/ws-subscriber-publish";
 import { wsSubscriberState } from "@/lib/ws-subscriber/ws-subscriber-state";
 import { apiKeyAuth, wsSubscriberAuth } from "@/middleware/auth";
-import { GatewayWS } from "@/schemas/kafka-ws-bridge.schema";
 import { MessageSchema } from "@/schemas/ws-subscribe.schema";
 import { Elysia } from "elysia";
 
@@ -29,10 +27,10 @@ export default new Elysia()
           return;
         }
 
-        registerWs(subscriberId, ws as unknown as GatewayWS);
+        registerWs(subscriberId, ws);
 
         console.log(
-          `${isoNowIST()}\t[WsSubscribe:Action]\tSUBSCRIBER : ${xSubscriberId} CONNECTED ID: ${subscriberId}`,
+          `${isoNowIST()}\t[WsSubscribe:Action]\tSubscriber : ${xSubscriberId} CONNECTED ID: ${subscriberId}`,
         );
         console.log(
           `${isoNowIST()}\t[WsSubscribe:Log]\tACTIVE WS CONNECTIONS: ${wsClients.size}`,
@@ -66,7 +64,7 @@ export default new Elysia()
 
         if (!result.success) {
           console.log(
-            `${isoNowIST()}\t[WsSubscribe:Error]\tINVALID MESSAGE FORMAT SUBSCRIBER : ${xSubscriberId} subscriberId=${subscriberId}`,
+            `${isoNowIST()}\t[WsSubscribe:Error]\tINVALID MESSAGE FORMAT Subscriber : ${xSubscriberId} subscriberId=${subscriberId}`,
           );
 
           ws.send({
@@ -160,7 +158,7 @@ export default new Elysia()
         }
       } catch {
         console.log(
-          `${isoNowIST()}\t[WsSubscribe:Error]\tMALFORMED JSON SUBSCRIBER : ${xSubscriberId} subscriberId=${subscriberId}`,
+          `${isoNowIST()}\t[WsSubscribe:Error]\tMALFORMED JSON Subscriber : ${xSubscriberId} subscriberId=${subscriberId}`,
         );
 
         ws.send({ type: "error", message: "Malformed JSON" });

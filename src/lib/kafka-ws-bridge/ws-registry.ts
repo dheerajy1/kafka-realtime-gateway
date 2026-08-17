@@ -5,7 +5,6 @@
  * - wsSubscriberState.subscribers (single shared routing state)
  * so selector and delivery always see the same live connection.
  */
-
 import { isoNowIST } from "@/lib/isoNowIST";
 import { pendingAcks, wsClients } from "@/lib/kafka-ws-bridge/state";
 import { wsSubscriberState } from "@/lib/ws-subscriber/ws-subscriber-state";
@@ -27,7 +26,7 @@ export function unregisterWs(id: number): void {
   for (const [corr, pending] of pendingAcks.entries()) {
     if (pending.subscriberId === id) {
       console.log(
-        `${isoNowIST()}\t[WsBridge:Disconnect]\tsubscriberId=${id}\tclientId=${pending.subscriber ?? "?"}\tpendingAcks=1\tcorr=${corr}\ttopic=${pending.topic}\tpartition=${pending.partition}\toffset=${pending.offset}`,
+        `${isoNowIST()}\t[WsBridge:Disconnect]\tsubscriberId=${id}\tclientId=${pending.subscriber}\tpendingAcks=1\tcorr=${corr}\ttopic=${pending.topic}\tpartition=${pending.partition}\toffset=${pending.offset}`,
       );
       pendingAcks.delete(corr);
       pending.reject(

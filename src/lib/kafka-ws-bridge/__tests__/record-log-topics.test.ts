@@ -1,21 +1,21 @@
 /**
- * Phase 7A — topic config from env; DLQs excluded from consumption.
+ * topic config from env; DLQs excluded from consumption.
  */
 
 import { describe, expect, test } from "bun:test";
 import { env } from "@/lib/env";
 import {
-  getAckRequiredTopics,
-  // getConsumerExcludedTopics,
-  getConsumerTopicPattern,
-  getSubscriberPublishAllowlist,
+  ackRequiredTopics,
+  // consumerExcludedTopics,
+  consumerTopicPattern,
+  subscriberPublishAllowlist,
   isAckRequiredTopic,
   isConsumerExcludedTopic,
 } from "@/lib/kafka-ws-bridge/record-log-topics";
 
 describe("record-log topic configuration", () => {
   test("ack-required topics match env write/read/status", () => {
-    const ack = getAckRequiredTopics();
+    const ack = ackRequiredTopics;
     expect(ack.has(env.RECORD_LOG_WRITE_TOPIC)).toBe(true);
     expect(ack.has(env.RECORD_LOG_READ_TOPIC)).toBe(true);
     expect(ack.has(env.RECORD_LOG_STATUS_TOPIC)).toBe(true);
@@ -30,7 +30,7 @@ describe("record-log topic configuration", () => {
   });
 
   test("consumer topic pattern excludes DLQs and internal topics", () => {
-    const pat = getConsumerTopicPattern();
+    const pat = consumerTopicPattern;
     expect(pat.test(env.RECORD_LOG_WRITE_TOPIC)).toBe(true);
     expect(pat.test(env.RECORD_LOG_READ_TOPIC)).toBe(true);
     expect(pat.test(env.RECORD_LOG_STATUS_TOPIC)).toBe(true);
@@ -40,7 +40,7 @@ describe("record-log topic configuration", () => {
   });
 
   test("subscriber publish allowlist includes DLQs", () => {
-    const allow = getSubscriberPublishAllowlist();
+    const allow = subscriberPublishAllowlist;
     expect(allow.has(env.RECORD_LOG_WRITE_DLQ_TOPIC)).toBe(true);
     expect(allow.has(env.RECORD_LOG_READ_DLQ_TOPIC)).toBe(true);
   });

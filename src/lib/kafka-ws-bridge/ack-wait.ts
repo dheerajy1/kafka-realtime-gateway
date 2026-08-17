@@ -2,8 +2,6 @@
  * ACK wait with Kafka consumer heartbeats, and commit safety gate.
  */
 
-import { sleep } from "bun";
-
 export function shouldCommitAfterAck(ctx: {
   isRunning: () => boolean;
   isStale: () => boolean;
@@ -21,30 +19,34 @@ export async function waitForAckWithHeartbeat(
   ackPromise: Promise<void>,
   heartbeat: () => Promise<void>,
   timeoutMs: number,
+  heartbeatIntervalMs = 3000,
 ): Promise<void> {
-  let settled = false;
-  const tracked = ackPromise.then(
-    () => {
-      settled = true;
-    },
-    (err) => {
-      settled = true;
-      throw err;
-    },
-  );
+  let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+  let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const deadline = Date.now() + timeoutMs;
-  while (!settled && Date.now() < deadline) {
-    try {
-      await heartbeat();
-    } catch {
+  const cleanup = () => {
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    if (timeoutTimer) clearTimeout(timeoutTimer);
+  };
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutTimer = setTimeout(() => {
+      reject(new Error("ACK timeout while heartbeating"));
+    }, timeoutMs);
+  });
+
+  // Periodically send heartbeats in background without blocking immediate ACK
+  heartbeatTimer = setInterval(() => {
+    heartbeat().catch(() => {
       /* heartbeat failure will surface via KafkaJS session handling */
-    }
-    await Promise.race([tracked, sleep(3000).then(() => undefined)]);
-  }
+    });
+  }, heartbeatIntervalMs);
 
-  if (!settled) {
-    throw new Error("ACK timeout while heartbeating");
+  try {
+    // Prevent unhandled rejections if timeout triggers first
+    ackPromise.catch(() => {});
+    await Promise.race([ackPromise, timeoutPromise]);
+  } finally {
+    cleanup();
   }
-  await tracked;
 }

@@ -4,13 +4,13 @@
 
 import { env } from "@/lib/env";
 import { isoNowIST } from "@/lib/isoNowIST";
-import { kafka } from "@/lib/kafka.config";
+import { processInboundMessage } from "@/lib/kafka-ws-bridge/process-inbound-message";
 import {
-  getConsumerTopicPattern,
+  consumerTopicPattern,
   isConsumerExcludedTopic,
-} from "./record-log-topics";
+} from "@/lib/kafka-ws-bridge/record-log-topics";
 import { setConsumerRef } from "@/lib/kafka-ws-bridge/state";
-import { processInboundMessage } from "./process-inbound-message";
+import { kafka } from "@/lib/kafka.config";
 
 export async function startKafkaWsBridge() {
   const consumer = kafka.consumer({
@@ -24,7 +24,7 @@ export async function startKafkaWsBridge() {
   await consumer.connect();
 
   await consumer.subscribe({
-    topic: getConsumerTopicPattern(),
+    topic: consumerTopicPattern,
   });
 
   await consumer.run({

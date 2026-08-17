@@ -3,7 +3,7 @@
  * Gateway is the sole Kafka producer for these pipeline topics.
  */
 import { isoNowIST } from "@/lib/isoNowIST";
-import { getSubscriberPublishAllowlist } from "@/lib/kafka-ws-bridge/record-log-topics";
+import { subscriberPublishAllowlist } from "@/lib/kafka-ws-bridge/record-log-topics";
 import { getProducer } from "@/lib/producer.kafka";
 import {
   PublishFailure,
@@ -12,7 +12,7 @@ import {
 } from "@/schemas/ws-subscribe.schema";
 
 export function isSubscriberPublishAllowed(topic: string): boolean {
-  return getSubscriberPublishAllowlist().has(topic);
+  return subscriberPublishAllowlist.has(topic);
 }
 
 /**

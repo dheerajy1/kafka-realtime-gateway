@@ -4,9 +4,11 @@ import { env } from "@/lib/env";
 import { MyError, errors } from "@/lib/errors";
 import { wsSubscriberState } from "@/lib/ws-subscriber/ws-subscriber-state";
 import {
+  ApiKeyAuthContext,
   AuthHeadersSchema,
   CtxAuthError,
   NoAuthHeadersSchema,
+  WsSubscriberContext,
   apiKeyAuthHeadersSchema,
 } from "@/schemas/auth.schema";
 import { wsSubscriberMetadataSchema } from "@/schemas/ws-subscribe.schema";
@@ -152,7 +154,7 @@ export const Auth = new Elysia().use(jwt(jwtVal)).macro({
 // This runs when you write .guard({ apiKey: true }) or .post(..., { apiKey: true })
 export const apiKeyAuth = new Elysia().use(NoAuth).macro("apiKey", {
   noAuth: true,
-  resolve: async ({ ctx }) => {
+  resolve: async ({ ctx }): Promise<{ ctx: ApiKeyAuthContext }> => {
     try {
       const { headers } = ctx;
 
@@ -180,7 +182,7 @@ export const apiKeyAuth = new Elysia().use(NoAuth).macro("apiKey", {
       const { "x-api-key": xApiKey, "x-api-secret": xApiSecret } =
         parseResult.data;
 
-      // Resolve + validate API key metadata via SP
+      // Resolve and validate API key metadata via SP
       const { success, data } = await fnVerifyApiKey({
         xApiKey,
       });
@@ -254,7 +256,7 @@ export const apiKeyAuth = new Elysia().use(NoAuth).macro("apiKey", {
 
 export const wsSubscriberAuth = new Elysia().use(NoAuth).macro("wsSubscriber", {
   noAuth: true,
-  resolve: ({ ctx }) => {
+  resolve: ({ ctx }): { ctx: WsSubscriberContext } => {
     const parseResult = wsSubscriberMetadataSchema.safeParse(ctx.headers);
 
     if (!parseResult.success) {

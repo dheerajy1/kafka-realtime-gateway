@@ -14,8 +14,7 @@ export async function commitMessageOffset(args: {
   resolveOffset: (offset: string) => void;
   heartbeat: () => Promise<void>;
 }): Promise<void> {
-  const { consumer, topic, partition, offset, resolveOffset, heartbeat } =
-    args;
+  const { consumer, topic, partition, offset, resolveOffset, heartbeat } = args;
 
   const nextOffset = (BigInt(offset) + 1n).toString();
 

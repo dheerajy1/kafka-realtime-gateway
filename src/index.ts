@@ -1,7 +1,7 @@
 import { ALLOWED_ORIGINS, publicPath } from "@/lib/constants";
 import "@/lib/db";
 import { MyError, errors } from "@/lib/errors";
-import { startKafkaWsBridge } from "@/lib/kafka-ws-bridge";
+import { startKafkaWsBridge } from "@/lib/kafka-ws-bridge/start-bridge";
 import { serverGate } from "@/middleware/server-gate";
 import aboutRouter from "@/routes/about";
 import healthzRouter from "@/routes/healthz";

@@ -62,8 +62,6 @@
 │   │   │   ├── ack-wait.ts
 │   │   │   ├── commit-offset.ts
 │   │   │   ├── deliver-to-subscribers.ts
-│   │   │   ├── headers.ts
-│   │   │   ├── index.ts
 │   │   │   ├── parse-inbound-message.ts
 │   │   │   ├── pending-acks.ts
 │   │   │   ├── process-inbound-message.ts
@@ -111,8 +109,10 @@
 │   ├── scripts/
 │   │   └── hash.ts
 │   ├── server.ts
-│   └── tailwind.css
+│   ├── tailwind.css
+│   └── types/
+│       └── global.type.ts
 ├── structure.txt
 └── tsconfig.json
 
-23 directories, 91 files
+24 directories, 90 files

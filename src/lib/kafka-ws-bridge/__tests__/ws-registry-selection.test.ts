@@ -1,5 +1,5 @@
 /**
- * Phase 7C — registered WS must be visible to subscriber-selection
+ * registered WS must be visible to subscriber-selection
  * via the shared registry (same Map instance).
  */
 
@@ -13,7 +13,7 @@ import type { GatewayWS } from "@/schemas/kafka-ws-bridge.schema";
 function makeFakeWs(subscriberId: number): GatewayWS {
   const subscriptions = new Set<string>();
   return {
-    send() {},
+    send: () => 0,
     data: {
       ctx: {
         subscriberId,

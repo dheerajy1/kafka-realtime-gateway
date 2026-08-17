@@ -3,43 +3,24 @@
  */
 
 import { isoNowIST } from "@/lib/isoNowIST";
-import { pendingAcks } from "@/lib/kafka-ws-bridge/state";
+import {
+  shouldCommitAfterAck,
+  waitForAckWithHeartbeat,
+} from "@/lib/kafka-ws-bridge/ack-wait";
+import { commitMessageOffset } from "@/lib/kafka-ws-bridge/commit-offset";
+import { deliverEventToSubscribers } from "@/lib/kafka-ws-bridge/deliver-to-subscribers";
+import { parseInboundMessage } from "@/lib/kafka-ws-bridge/parse-inbound-message";
 import {
   markPendingDelivered,
   registerPendingAck,
-} from "./pending-acks";
-import {
-  isAckRequiredTopic,
-} from "./record-log-topics";
+} from "@/lib/kafka-ws-bridge/pending-acks";
+import { isAckRequiredTopic } from "@/lib/kafka-ws-bridge/record-log-topics";
+import { pendingAcks } from "@/lib/kafka-ws-bridge/state";
 import {
   pickResponsibleSubscriber,
   waitForResponsibleSubscriber,
-} from "./subscriber-selection";
-import { waitForAckWithHeartbeat, shouldCommitAfterAck } from "./ack-wait";
-import { commitMessageOffset } from "./commit-offset";
-import { parseInboundMessage } from "./parse-inbound-message";
-import { deliverEventToSubscribers } from "./deliver-to-subscribers";
-
-type KafkaConsumer = {
-  commitOffsets: (
-    offsets: { topic: string; partition: number; offset: string }[],
-  ) => Promise<void>;
-};
-
-export type ProcessInboundMessageArgs = {
-  consumer: KafkaConsumer;
-  topic: string;
-  partition: number;
-  message: {
-    offset: string;
-    value: { toString(): string } | null | undefined;
-    headers?: unknown;
-  };
-  resolveOffset: (offset: string) => void;
-  heartbeat: () => Promise<void>;
-  isRunning: () => boolean;
-  isStale: () => boolean;
-};
+} from "@/lib/kafka-ws-bridge/subscriber-selection";
+import { ProcessInboundMessageArgs } from "@/types/global.type";
 
 /**
  * @returns `"stop-batch"` when the batch loop should break (ACK-required, no subscriber).

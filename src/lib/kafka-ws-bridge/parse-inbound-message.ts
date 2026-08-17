@@ -2,59 +2,59 @@
  * Parse one Kafka message value into correlationId + payload.
  */
 
+import { MyError } from "@/lib/errors";
+import { getFilePath } from "@/lib/get-file-path";
 import { KafkaMsgValSchema } from "@/schemas/kafka-ws-bridge.schema";
-
-export type ParsedInboundMessage =
-  | { ok: true; correlationId: string; eventPayload: Record<string, unknown> }
-  | { ok: false; reason: "empty" | "malformed-json" | "invalid-message"; issues?: unknown };
+import { ParsedInboundMessage } from "@/types/global.type";
 
 export function parseInboundMessage(
   value: string | undefined,
 ): ParsedInboundMessage {
-  if (!value) {
-    return { ok: false, reason: "empty" };
-  }
-
-  let parsedJson: unknown;
-
   try {
-    parsedJson = JSON.parse(value);
-  } catch {
-    return { ok: false, reason: "malformed-json" };
-  }
+    if (!value) {
+      throw new Error("EMPTY_MESSAGE");
+    }
 
-  const result = KafkaMsgValSchema.safeParse(parsedJson);
+    const parsedJson = JSON.parse(value);
+    const result = KafkaMsgValSchema.safeParse(parsedJson);
 
-  if (result.success) {
+    if (!result.success) {
+      return {
+        ok: false,
+        reason: "invalid-message",
+        issues: result.error.issues,
+      };
+    }
+
     return {
       ok: true,
       correlationId: result.data.correlationId,
-      eventPayload: { ...result.data },
+      eventPayload: result.data as Record<string, unknown>,
     };
-  }
+  } catch (error: unknown) {
+    if (error instanceof MyError) {
+      throw error;
+    }
 
-  const loose = parsedJson as Record<string, unknown> | null;
-  const cid =
-    loose &&
-    typeof loose === "object" &&
-    typeof loose.correlationId === "string"
-      ? loose.correlationId
-      : null;
+    if (error instanceof SyntaxError) {
+      return {
+        ok: false,
+        reason: "malformed-json",
+      };
+    }
 
-  const uuidV7 =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (error instanceof Error && error.message === "EMPTY_MESSAGE") {
+      return {
+        ok: false,
+        reason: "empty",
+      };
+    }
 
-  if (!cid || !uuidV7.test(cid)) {
+    console.log(`${getFilePath()} - unexpected parse error`, error);
+
     return {
       ok: false,
       reason: "invalid-message",
-      issues: result.error.issues,
     };
   }
-
-  return {
-    ok: true,
-    correlationId: cid,
-    eventPayload: { ...loose },
-  };
 }
