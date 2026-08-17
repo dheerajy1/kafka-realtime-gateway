@@ -6,58 +6,67 @@ import {
   unregisterWs,
   wsClients,
 } from "@/lib/kafka-ws-bridge";
-import { handleSubscriberPublish } from "@/lib/ws-subscriber-publish";
-import { apiKeyAuth } from "@/middleware/auth";
+import { handleSubscriberPublish } from "@/lib/ws-subscriber/ws-subscriber-publish";
+import { wsSubscriberState } from "@/lib/ws-subscriber/ws-subscriber-state";
+import { apiKeyAuth, wsSubscriberAuth } from "@/middleware/auth";
 import { GatewayWS } from "@/schemas/kafka-ws-bridge.schema";
 import { MessageSchema } from "@/schemas/ws-subscribe.schema";
 import { Elysia } from "elysia";
 
-const topicSubscribers = new Map<string, Set<number>>();
-
-let subscriberCounter = 0;
-
 export default new Elysia()
   .use(apiKeyAuth)
-  .guard({ apiKey: true })
-  .derive(() => ({
-    subscriptions: new Set<string>(),
-    subscriberId: ++subscriberCounter,
-  }))
+  .use(wsSubscriberAuth)
+  .guard({ apiKey: true, wsSubscriber: true })
   .ws("/ws-subscribe", {
     open: (ws) => {
-      const { ctx, subscriberId } = ws.data;
+      try {
+        const { ctx } = ws.data;
+        const { xSubscriberId, subscriberId } = ctx;
 
-      if (ctx.authError.code != null) {
-        ws.send({ type: "error", ...ctx.authError });
-        ws.close(4001, JSON.stringify(ctx.authError));
-        return;
+        if (ctx.authError?.code != null) {
+          ws.send({ type: "error", ...ctx.authError });
+          ws.close(4001, JSON.stringify(ctx.authError));
+          return;
+        }
+
+        registerWs(subscriberId, ws as unknown as GatewayWS);
+
+        console.log(
+          `${isoNowIST()}\t[WsSubscribe:Action]\tSUBSCRIBER : ${xSubscriberId} CONNECTED ID: ${subscriberId}`,
+        );
+        console.log(
+          `${isoNowIST()}\t[WsSubscribe:Log]\tACTIVE WS CONNECTIONS: ${wsClients.size}`,
+        );
+
+        ws.send({ type: "ready" });
+      } catch (err) {
+        console.error(
+          `${isoNowIST()}\t[WsSubscribe:Error]\topen failed`,
+          err instanceof Error ? err.message : err,
+        );
+        try {
+          ws.close(1011, "subscriber open failed");
+        } catch {
+          /* ignore close errors */
+        }
       }
-
-      registerWs(subscriberId, ws as unknown as GatewayWS);
-
-      console.log(
-        `${isoNowIST()}\t[WsSubscribe:Action]\tSUBSCRIBER CONNECTED ID: ${subscriberId}`,
-      );
-      console.log(
-        `${isoNowIST()}\t[WsSubscribe:Log]\tACTIVE WS CONNECTIONS: ${wsClients.size}`,
-      );
-
-      ws.send({ type: "ready" });
     },
 
     message: async (ws, raw) => {
-      const { subscriberId, subscriptions } = ws.data;
+      const { xSubscriberId, subscriberId, subscriptions } = ws.data.ctx;
 
-      let data: unknown;
+      const { topicSubscribers } = wsSubscriberState;
 
       try {
+        let data: unknown;
+
         data = typeof raw === "string" ? JSON.parse(raw) : raw;
 
         const result = MessageSchema.safeParse(data);
 
         if (!result.success) {
           console.log(
-            `${isoNowIST()}\t[WsSubscribe:Error]\tINVALID MESSAGE FORMAT subscriberId=${subscriberId}`,
+            `${isoNowIST()}\t[WsSubscribe:Error]\tINVALID MESSAGE FORMAT SUBSCRIBER : ${xSubscriberId} subscriberId=${subscriberId}`,
           );
 
           ws.send({
@@ -81,7 +90,7 @@ export default new Elysia()
           topicSubscribers.get(parsed.topic)!.add(subscriberId);
 
           console.log(
-            `${isoNowIST()}\t[WsSubscribe:Action]\tSUBSCRIBER ${subscriberId} JOINED Topic: ${parsed.topic}`,
+            `${isoNowIST()}\t[WsSubscribe:Action]\tSUBSCRIBER ${xSubscriberId} ${subscriberId} JOINED Topic: ${parsed.topic}`,
           );
 
           ws.send({ type: "subscribed", topic: parsed.topic });
@@ -102,10 +111,9 @@ export default new Elysia()
         }
 
         if (parsed.type === "publish") {
-          const clientId = (ws as unknown as GatewayWS).data.clientId;
           const pub = await handleSubscriberPublish(parsed, {
             subscriberId,
-            clientId,
+            subscriber: xSubscriberId,
           });
 
           if (pub.ok) {
@@ -128,10 +136,11 @@ export default new Elysia()
         }
 
         if (parsed.type === "processed") {
-          const ackResult = await commitByCorrelationId(
-            parsed.correlationId,
-            subscriberId,
-          );
+          const ackResult = await commitByCorrelationId({
+            correlationId: parsed.correlationId,
+            fromSubscriberId: subscriberId,
+            subscriber: xSubscriberId,
+          });
 
           if (ackResult.ok) {
             ws.send({
@@ -151,7 +160,7 @@ export default new Elysia()
         }
       } catch {
         console.log(
-          `${isoNowIST()}\t[WsSubscribe:Error]\tMALFORMED JSON subscriberId=${subscriberId}`,
+          `${isoNowIST()}\t[WsSubscribe:Error]\tMALFORMED JSON SUBSCRIBER : ${xSubscriberId} subscriberId=${subscriberId}`,
         );
 
         ws.send({ type: "error", message: "Malformed JSON" });
@@ -160,7 +169,9 @@ export default new Elysia()
     },
 
     close: (ws) => {
-      const { subscriberId, subscriptions } = ws.data;
+      const { xSubscriberId, subscriberId, subscriptions } = ws.data.ctx;
+
+      const { topicSubscribers } = wsSubscriberState;
 
       for (const topic of subscriptions) {
         const set = topicSubscribers.get(topic);
@@ -174,13 +185,13 @@ export default new Elysia()
       unregisterWs(subscriberId);
 
       if (wsClients.size === 0) {
-        subscriberCounter = 0;
+        wsSubscriberState.subscriberCounter = 0;
       }
 
       console.log(
-        `${isoNowIST()}\t[WsBridge:Disconnect]\tsubscriberId=${subscriberId}\tpendingAcks=${pending}`,
+        `${isoNowIST()}\t[WsBridge:Disconnect]\tSUBSCRIBER : ${xSubscriberId}\tsubscriberId=${subscriberId}\tpendingAcks=${pending}`,
       );
 
-      ws.data.subscriptions.clear();
+      subscriptions.clear();
     },
   });

@@ -2,12 +2,14 @@ import { jwtVal } from "@/lib/constants";
 import { fnVerifyApiKey } from "@/lib/db-scripts/fn-verify-api-key";
 import { env } from "@/lib/env";
 import { MyError, errors } from "@/lib/errors";
+import { wsSubscriberState } from "@/lib/ws-subscriber/ws-subscriber-state";
 import {
   AuthHeadersSchema,
   CtxAuthError,
   NoAuthHeadersSchema,
   apiKeyAuthHeadersSchema,
 } from "@/schemas/auth.schema";
+import { wsSubscriberMetadataSchema } from "@/schemas/ws-subscribe.schema";
 import { jwt } from "@elysiajs/jwt";
 import { Elysia } from "elysia";
 
@@ -247,5 +249,28 @@ export const apiKeyAuth = new Elysia().use(NoAuth).macro("apiKey", {
         },
       };
     }
+  },
+});
+
+export const wsSubscriberAuth = new Elysia().use(NoAuth).macro("wsSubscriber", {
+  noAuth: true,
+  resolve: ({ ctx }) => {
+    const parseResult = wsSubscriberMetadataSchema.safeParse(ctx.headers);
+
+    if (!parseResult.success) {
+      throw new MyError({
+        code: "BAD_REQUEST",
+        message: errors.BAD_REQUEST.INVALID_HEADER_VALUES.message,
+        error: errors.BAD_REQUEST.INVALID_HEADER_VALUES.error,
+      });
+    }
+
+    return {
+      ctx: {
+        xSubscriberId: parseResult.data["x-subscriber-id"],
+        subscriberId: ++wsSubscriberState.subscriberCounter,
+        subscriptions: new Set<string>(),
+      },
+    };
   },
 });

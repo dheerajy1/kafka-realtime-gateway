@@ -41,9 +41,12 @@ export const KafkaMsgValSchema = z.discriminatedUnion("eventType", [
 export interface GatewayWS {
   send(data: string | Record<string, unknown>): void;
   data: {
-    subscriptions: Set<string>;
-    subscriberId: number;
-    clientId?: string;
+    ctx: {
+      subscriptions: Set<string>;
+      subscriberId: number;
+      xSubscriberId: string;
+    };
+    clientId: string;
   };
 }
 
@@ -53,7 +56,7 @@ export type PendingAck = {
   offset: string;
   correlationId: string;
   subscriberId: number;
-  clientId?: string;
+  subscriber: string;
   resolve: () => void;
   reject: (err: Error) => void;
   delivered: boolean;

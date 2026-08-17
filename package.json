@@ -12,6 +12,7 @@
     "clean": "rm -rf dist/* dist/.* || true",
     "test": "bun --env-file=.env.development test",
     "test:http-publish": "bun --env-file=.env.development test src/routes/v1/kafka/__tests__",
+    "test:bridge-topics": "bun --env-file=.env.development test src/lib/kafka-ws-bridge",
     "hash": "bun src/scripts/hash.ts",
     "docker:build": "docker compose -f docker/docker-compose.yml build",
     "docker:up": "docker compose -f docker/docker-compose.yml up -d",

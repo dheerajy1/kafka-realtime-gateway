@@ -147,4 +147,46 @@ export const envSchema = z.object({
     .describe(
       "Kafka consumer group id for kafka-api-gateway (unique per environment)",
     ),
+
+  // ============================
+  // Record Log Kafka topics
+  // ============================
+  RECORD_LOG_WRITE_TOPIC: z
+    .string()
+    .trim()
+    .min(1, { message: "RECORD_LOG_WRITE_TOPIC is required and cannot be empty" })
+    .max(200)
+    .describe("Kafka topic for Record Log write-model ingest"),
+
+  RECORD_LOG_READ_TOPIC: z
+    .string()
+    .trim()
+    .min(1, { message: "RECORD_LOG_READ_TOPIC is required and cannot be empty" })
+    .max(200)
+    .describe("Kafka topic for Record Log read-model ingest"),
+
+  RECORD_LOG_STATUS_TOPIC: z
+    .string()
+    .trim()
+    .min(1, { message: "RECORD_LOG_STATUS_TOPIC is required and cannot be empty" })
+    .max(200)
+    .describe("Kafka topic for Record Log pipeline status events"),
+
+  RECORD_LOG_WRITE_DLQ_TOPIC: z
+    .string()
+    .trim()
+    .min(1, {
+      message: "RECORD_LOG_WRITE_DLQ_TOPIC is required and cannot be empty",
+    })
+    .max(200)
+    .describe("Kafka DLQ topic for write-model (Gateway must not consume)"),
+
+  RECORD_LOG_READ_DLQ_TOPIC: z
+    .string()
+    .trim()
+    .min(1, {
+      message: "RECORD_LOG_READ_DLQ_TOPIC is required and cannot be empty",
+    })
+    .max(200)
+    .describe("Kafka DLQ topic for read-model (Gateway must not consume)"),
 });

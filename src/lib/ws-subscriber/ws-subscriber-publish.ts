@@ -3,6 +3,7 @@
  * Gateway is the sole Kafka producer for these pipeline topics.
  */
 import { isoNowIST } from "@/lib/isoNowIST";
+import { getSubscriberPublishAllowlist } from "@/lib/kafka-ws-bridge/record-log-topics";
 import { getProducer } from "@/lib/producer.kafka";
 import {
   PublishFailure,
@@ -10,17 +11,8 @@ import {
   WsPublishCommand,
 } from "@/schemas/ws-subscribe.schema";
 
-/** Topics subscribers may publish via the subscribe WS (including retries + DLQ). */
-export const SUBSCRIBER_PUBLISH_ALLOWLIST = new Set<string>([
-  "record-log-ingest-write-model",
-  "record-log-ingest-write-model-dlq",
-  "record-log-ingest-read-model",
-  "record-log-ingest-read-model-dlq",
-  "record-log-status",
-]);
-
 export function isSubscriberPublishAllowed(topic: string): boolean {
-  return SUBSCRIBER_PUBLISH_ALLOWLIST.has(topic);
+  return getSubscriberPublishAllowlist().has(topic);
 }
 
 /**
@@ -29,13 +21,13 @@ export function isSubscriberPublishAllowed(topic: string): boolean {
  */
 export async function handleSubscriberPublish(
   cmd: WsPublishCommand,
-  meta: { subscriberId: number; clientId?: string },
+  meta: { subscriberId: number; subscriber: string },
 ): Promise<PublishSuccess | PublishFailure> {
   const { requestId, topic, key, value, headers } = cmd;
 
   if (!isSubscriberPublishAllowed(topic)) {
     console.log(
-      `${isoNowIST()}\t[WsPublish:Reject]\tsubscriberId=${meta.subscriberId}\tclientId=${meta.clientId ?? "?"}\trequestId=${requestId}\ttopic=${topic}\treason=unauthorized-topic`,
+      `${isoNowIST()}\t[WsPublish:Reject]\tsubscriberId=${meta.subscriberId}\tSubscriber=${meta.subscriber ?? "?"}\trequestId=${requestId}\ttopic=${topic}\treason=unauthorized-topic`,
     );
     return {
       ok: false,
@@ -46,7 +38,7 @@ export async function handleSubscriberPublish(
   }
 
   console.log(
-    `${isoNowIST()}\t[WsPublish:Request]\tsubscriberId=${meta.subscriberId}\tclientId=${meta.clientId ?? "?"}\trequestId=${requestId}\ttopic=${topic}\tkey=${key ?? ""}`,
+    `${isoNowIST()}\t[WsPublish:Request]\tsubscriberId=${meta.subscriberId}\tSubscriber=${meta.subscriber ?? "?"}\trequestId=${requestId}\ttopic=${topic}\tkey=${key ?? ""}`,
   );
 
   try {
@@ -81,7 +73,7 @@ export async function handleSubscriberPublish(
         : String(meta0?.offset ?? "");
 
     console.log(
-      `${isoNowIST()}\t[WsPublish:Success]\tsubscriberId=${meta.subscriberId}\trequestId=${requestId}\ttopic=${topic}\tpartition=${partition}\toffset=${offset}`,
+      `${isoNowIST()}\t[WsPublish:Success]\tsubscriberId=${meta.subscriberId}\tSubscriber=${meta.subscriber ?? "?"}\trequestId=${requestId}\ttopic=${topic}\tpartition=${partition}\toffset=${offset}`,
     );
 
     return {
@@ -94,7 +86,7 @@ export async function handleSubscriberPublish(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.log(
-      `${isoNowIST()}\t[WsPublish:Fail]\tsubscriberId=${meta.subscriberId}\trequestId=${requestId}\ttopic=${topic}\terr=${msg}`,
+      `${isoNowIST()}\t[WsPublish:Fail]\tsubscriberId=${meta.subscriberId}\tSubscriber=${meta.subscriber ?? "?"}\trequestId=${requestId}\ttopic=${topic}\terr=${msg}`,
     );
     return {
       ok: false,

@@ -95,8 +95,6 @@ All commands are managed via `bun`.
 
 ### Development & Build
 
-### Development & Build
-
 | Bun Command                                      | WD                                 | Bun Command with CWD                                                                   | Description                                                                                              |
 | :----------------------------------------------- | :--------------------------------- | :------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------- |
 | `bun run dev`                                    | `~/dev/vs-code/kafka-api-gateway`  | `bun run --cwd ~/dev/vs-code/kafka-api-gateway dev`                                     | Starts the dev server with hot reloading and builds Tailwind CSS on change.                              |
@@ -107,6 +105,7 @@ All commands are managed via `bun`.
 | `bun run clean`                                  | `~/dev/vs-code/kafka-api-gateway`  | `bun run --cwd ~/dev/vs-code/kafka-api-gateway clean`                                   | Removes the contents of the `dist/` directory.                                                           |
 | `bun run test`                                   | `~/dev/vs-code/kafka-api-gateway`  | `bun run --cwd ~/dev/vs-code/kafka-api-gateway test`                                    | Runs the full test suite using Bun's native test runner.                                                 |
 | `bun run test:http-publish`                      | `~/dev/vs-code/kafka-api-gateway`  | `bun run --cwd ~/dev/vs-code/kafka-api-gateway test:http-publish`                       | Runs unit tests specifically for the Kafka HTTP publishing route.                                        |
+| `bun run test:bridge-topics`                     | `~/dev/vs-code/kafka-api-gateway`  | `bun --env-file=.env.development test src/lib/kafka-ws-bridge`                                 | Runs unit and integration tests for the Kafka WebSocket bridge module using the development environment variables.     |
 | `bun run hash 'apikeytohash'`                    | `~/dev/vs-code/kafka-api-gateway`  | `bun run --cwd ~/dev/vs-code/kafka-api-gateway hash -- 'apikeytohash'`                  | Hashes a raw API key string using bcrypt (cost: 12) and prints the result to stdout.                     |
 
 ### Docker Operations
@@ -127,3 +126,16 @@ These scripts target the Compose configuration located at `docker/docker-compose
 | `bun run docker:logs:clear` | `~/dev/vs-code/kafka-api-gateway`  | `bun run --cwd ~/dev/vs-code/kafka-api-gateway docker:logs:clear`         | `sudo truncate -s 0 $(docker inspect --format='{{.LogPath}}' kafka-api-gateway)`                                                                                              | Clears the log file for the `kafka-api-gateway` container without stopping it.  |
 | `bun run docker:rmi`        | `~/dev/vs-code/kafka-api-gateway`  | `bun run --cwd ~/dev/vs-code/kafka-api-gateway docker:rmi`                | `docker image rm kafka-api-gateway:latest`                                                                                                                               | Removes the local Docker image for the API gateway.                             |
 | `bun run docker:clean`      | `~/dev/vs-code/kafka-api-gateway`  | `bun run --cwd ~/dev/vs-code/kafka-api-gateway docker:clean`              | `docker compose -f ~/dev/vs-code/kafka-api-gateway/docker/docker-compose.yml down && docker image rm -f kafka-api-gateway:latest`                                        | Stops containers and forcefully removes the API gateway Docker image.           |
+
+## Record Log Kafka topics (env)
+
+| Variable | Purpose |
+|----------|---------|
+| `RECORD_LOG_WRITE_TOPIC` | Write-model ingest (ACK required) |
+| `RECORD_LOG_READ_TOPIC` | Read-model ingest (ACK required) |
+| `RECORD_LOG_STATUS_TOPIC` | Pipeline status (ACK required) |
+| `RECORD_LOG_WRITE_DLQ_TOPIC` | Write-model DLQ — **not consumed** by Gateway |
+| `RECORD_LOG_READ_DLQ_TOPIC` | Read-model DLQ — **not consumed** by Gateway |
+
+Topic names come only from validated environment configuration (`src/schemas/env.schema.ts`). The Gateway consumer excludes both DLQ topics so messages remain Kafka-retained. Subscribers may still publish to DLQ topics over the authenticated WS.
+

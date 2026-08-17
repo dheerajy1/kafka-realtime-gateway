@@ -54,3 +54,12 @@ export const MessageSchema = z.union([
   ProcessedSchema,
   WsPublishCommandSchema,
 ]);
+
+export const wsSubscriberMetadataSchema = z.object({
+  "x-subscriber-id": z
+    .string()
+    .trim()
+    .min(1, { message: "x-subscriber-id is required and cannot be empty" })
+    .max(44, "SUBSCRIBER_ID must match expected length")
+    .describe("Subscriber identifier"),
+});

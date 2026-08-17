@@ -28,7 +28,8 @@
 ├── logs/
 │   ├── test-logs-1.md
 │   ├── test-logs-2-success.md
-│   └── test-logs-3-success.md
+│   ├── test-logs-3-success.md
+│   └── test-logs-4-success.md
 ├── package.json
 ├── public/
 │   ├── favicon.ico
@@ -54,10 +55,28 @@
 │   │   ├── errors.ts
 │   │   ├── get-file-path.ts
 │   │   ├── isoNowIST.ts
-│   │   ├── kafka-ws-bridge.ts
+│   │   ├── kafka-ws-bridge/
+│   │   │   ├── __tests__/
+│   │   │   │   ├── record-log-topics.test.ts
+│   │   │   │   └── ws-registry-selection.test.ts
+│   │   │   ├── ack-wait.ts
+│   │   │   ├── commit-offset.ts
+│   │   │   ├── deliver-to-subscribers.ts
+│   │   │   ├── headers.ts
+│   │   │   ├── index.ts
+│   │   │   ├── parse-inbound-message.ts
+│   │   │   ├── pending-acks.ts
+│   │   │   ├── process-inbound-message.ts
+│   │   │   ├── record-log-topics.ts
+│   │   │   ├── start-bridge.ts
+│   │   │   ├── state.ts
+│   │   │   ├── subscriber-selection.ts
+│   │   │   └── ws-registry.ts
 │   │   ├── kafka.config.ts
 │   │   ├── producer.kafka.ts
-│   │   └── ws-subscriber-publish.ts
+│   │   └── ws-subscriber/
+│   │       ├── ws-subscriber-publish.ts
+│   │       └── ws-subscriber-state.ts
 │   ├── middleware/
 │   │   ├── auth.ts
 │   │   └── server-gate.ts
@@ -94,12 +113,6 @@
 │   ├── server.ts
 │   └── tailwind.css
 ├── structure.txt
-├── tests/
-│   ├── ws-test.ts
-│   ├── ws-test2.ts
-│   ├── ws-test3.ts
-│   ├── ws-test4.ts
-│   └── ws-test5.ts
 └── tsconfig.json
 
-21 directories, 80 files
+23 directories, 91 files
