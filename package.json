@@ -10,7 +10,7 @@
     "build": "bun run clean && bunx tailwindcss -i ./src/tailwind.css -o ./public/global.css && tsc && tsc-alias && cp -r public dist/public",
     "start": "bun --env-file=.env.production dist/server.js",
     "clean": "rm -rf dist/* dist/.* || true",
-    "test": "bun --env-file=.env.development test",
+    "test": "bun --env-file=.env.development test src",
     "test:http-publish": "bun --env-file=.env.development test src/routes/v1/kafka/__tests__",
     "test:bridge-topics": "bun --env-file=.env.development test src/lib/kafka-ws-bridge",
     "hash": "bun src/scripts/hash.ts",

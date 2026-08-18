@@ -127,15 +127,88 @@ These scripts target the Compose configuration located at `docker/docker-compose
 | `bun run docker:rmi`        | `~/dev/vs-code/kafka-api-gateway`  | `bun run --cwd ~/dev/vs-code/kafka-api-gateway docker:rmi`                | `docker image rm kafka-api-gateway:latest`                                                                                                                               | Removes the local Docker image for the API gateway.                             |
 | `bun run docker:clean`      | `~/dev/vs-code/kafka-api-gateway`  | `bun run --cwd ~/dev/vs-code/kafka-api-gateway docker:clean`              | `docker compose -f ~/dev/vs-code/kafka-api-gateway/docker/docker-compose.yml down && docker image rm -f kafka-api-gateway:latest`                                        | Stops containers and forcefully removes the API gateway Docker image.           |
 
-## Record Log Kafka topics (env)
+## DB-backed Kafka topic registry
 
-| Variable | Purpose |
-|----------|---------|
-| `RECORD_LOG_WRITE_TOPIC` | Write-model ingest (ACK required) |
-| `RECORD_LOG_READ_TOPIC` | Read-model ingest (ACK required) |
-| `RECORD_LOG_STATUS_TOPIC` | Pipeline status (ACK required) |
-| `RECORD_LOG_WRITE_DLQ_TOPIC` | Write-model DLQ — **not consumed** by Gateway |
-| `RECORD_LOG_READ_DLQ_TOPIC` | Read-model DLQ — **not consumed** by Gateway |
+Topic routing policy is **not** configured via environment variables. The Gateway loads policy from PostgreSQL:
 
-Topic names come only from validated environment configuration (`src/schemas/env.schema.ts`). The Gateway consumer excludes both DLQ topics so messages remain Kafka-retained. Subscribers may still publish to DLQ topics over the authenticated WS.
+```sql
+SELECT * FROM fn_get_gateway_kafka_topics();
+```
+
+### Table `kafka_topic` (policy only)
+
+| Column | Meaning |
+|--------|---------|
+| `topic_name` | Primary key — Kafka topic name |
+| `gateway_consume` | Gateway consumer subscribes when true |
+| `ack_required` | Subscriber ACK required before offset commit |
+| `subscriber_publish_allowed` | Authenticated WS subscribers may publish |
+| `enabled` | Inactive rows are ignored |
+| `description` | Optional human note |
+| `created_utc` / `updated_utc` | UTC audit timestamps |
+
+The registry is **not** a catalogue of every topic in the Kafka cluster. Unrelated Kafka topics are ignored.
+
+### Startup validation
+
+1. Load enabled policy via `fn_get_gateway_kafka_topics()`.
+2. Validate each enabled topic exists in Kafka (KafkaJS Admin `listTopics`).
+3. **Fail startup** if any configured enabled topic is missing.
+4. Do **not** auto-create Kafka topics.
+
+### Runtime refresh
+
+Every 60s the Gateway reloads policy from PostgreSQL:
+
+- **Additions**: new enabled + `gateway_consume` topics are subscribed if they exist in Kafka.
+- Missing Kafka topics at refresh time are **logged**; the Gateway continues.
+- **Removals / disablements**: KafkaJS does not support reliable single-topic unsubscribe on the running consumer. Policy changes that remove consume eligibility take full effect for consumption **after Gateway restart**. Documented limitation — do not claim live unsubscribe.
+
+### Seeded topics
+
+**Record Log** (same semantics as the previous env-based configuration):
+
+| Topic | consume | ack | publish |
+|-------|---------|-----|---------|
+| `record-log-ingest-write-model` | yes | yes | yes |
+| `record-log-ingest-read-model` | yes | yes | yes |
+| `record-log-status` | yes | yes | yes |
+| `record-log-ingest-write-model-dlq` | no | no | yes |
+| `record-log-ingest-read-model-dlq` | no | no | yes |
+
+**Jobs** (no status DLQ in this architecture):
+
+| Topic | consume | ack | publish |
+|-------|---------|-----|---------|
+| `jobs-ingest-write-model` | yes | yes | yes |
+| `jobs-ingest-read-model` | yes | yes | yes |
+| `jobs-status` | yes | yes | yes |
+| `jobs-ingest-write-model-dlq` | no | no | yes |
+| `jobs-ingest-read-model-dlq` | no | no | yes |
+
+### Create Jobs topics (Kafka CLI)
+
+Topics must be created outside the Gateway:
+
+```bash
+docker exec -it kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic jobs-ingest-write-model
+docker exec -it kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic jobs-ingest-read-model
+docker exec -it kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic jobs-status
+docker exec -it kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic jobs-ingest-write-model-dlq
+docker exec -it kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic jobs-ingest-read-model-dlq
+```
+
+List topics:
+
+```bash
+docker exec -it kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
+```
+
+### Adding a future domain pipeline
+
+1. Create the Kafka topic(s) explicitly (CLI above).
+2. `INSERT` policy row(s) into `kafka_topic` (or re-run canonical seed scripts carefully).
+3. No Kafka API Gateway TypeScript topic-name change is required.
+
+Application code must **never** `SELECT` from `kafka_topic` directly — only call `fn_get_gateway_kafka_topics()`.
 

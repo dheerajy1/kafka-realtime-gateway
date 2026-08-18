@@ -14,7 +14,7 @@ import {
   markPendingDelivered,
   registerPendingAck,
 } from "@/lib/kafka-ws-bridge/pending-acks";
-import { isAckRequiredTopic } from "@/lib/kafka-ws-bridge/record-log-topics";
+import { isAckRequiredTopic } from "@/lib/kafka-ws-bridge/topic-policy";
 import { pendingAcks } from "@/lib/kafka-ws-bridge/state";
 import {
   pickResponsibleSubscriber,
