@@ -230,3 +230,15 @@ export interface WsSubscriberContext {
 
 // Combined context for WS routes using both middlewares
 export interface WsGatewayContext extends ApiKeyAuthContext, WsSubscriberContext {}
+
+// =========================
+// ERROR RESPONSE
+// =========================
+export const ErrorResponseSchema = z.object({
+    success: z.literal(false),
+    httpCode: z.number(),
+    error: z.string(),
+    message: z.string(),
+});
+
+export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;

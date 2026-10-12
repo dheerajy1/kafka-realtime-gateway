@@ -416,6 +416,10 @@ export const errors = {
       message: "Circuit breaker is open due to repeated failures.",
       error: "Circuit breaker open",
     },
+    DB_PROBE_FAILED: {
+      message: "Database connection validation probe failed",
+      error: "Database is disconnected or unreachable",
+    },
   },
 
   GATEWAY_TIMEOUT: {

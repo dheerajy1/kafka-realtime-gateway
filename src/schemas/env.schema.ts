@@ -1,6 +1,12 @@
 import { z } from "zod";
 
 export const envSchema = z.object({
+  APP_PORT: z.coerce
+    .number()
+    .int()
+    .positive()
+    .describe("Port for application service"),
+
   JWT_SECRET: z
     .string()
     .trim()
@@ -146,5 +152,5 @@ export const envSchema = z.object({
     })
     .describe(
       "Kafka consumer group id for kafka-api-gateway (unique per environment)",
-    )
+    ),
 });
