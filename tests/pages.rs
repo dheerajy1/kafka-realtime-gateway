@@ -6,7 +6,7 @@ use common::{body_json, body_text, get};
 // GET / returns the Home page html
 #[tokio::test]
 async fn home_renders_html() {
-    let response = get("/", &[("accept", "text/html")]).await;
+    let response = get("/", &[("accept", "text/html"), ("cookie", "auth=ok")]).await;
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -21,7 +21,7 @@ async fn home_renders_html() {
 // GET /about returns the About page html
 #[tokio::test]
 async fn about_renders_html() {
-    let response = get("/about", &[("accept", "text/html")]).await;
+    let response = get("/about", &[("accept", "text/html"), ("cookie", "auth=ok")]).await;
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -48,7 +48,11 @@ async fn login_renders_form() {
 // GET /healthz/db renders the database part as down in html
 #[tokio::test]
 async fn healthz_db_renders_down_in_html() {
-    let response = get("/healthz/db", &[("accept", "text/html")]).await;
+    let response = get(
+        "/healthz/db",
+        &[("accept", "text/html"), ("cookie", "auth=ok")],
+    )
+    .await;
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -91,10 +95,10 @@ async fn logo_and_favicon_are_served() {
     );
 }
 
-// GET /openapi/json returns the spec with the title and the health paths
+// GET /openapi/json returns the spec with the title and the health paths, the portal cookie lets it pass the gate
 #[tokio::test]
 async fn openapi_json_lists_health_paths() {
-    let response = get("/openapi/json", &[]).await;
+    let response = get("/openapi/json", &[("cookie", "auth=ok")]).await;
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -109,7 +113,11 @@ async fn openapi_json_lists_health_paths() {
 // GET /openapi serves the Scalar UI html
 #[tokio::test]
 async fn openapi_scalar_ui_is_served() {
-    let response = get("/openapi", &[("accept", "text/html")]).await;
+    let response = get(
+        "/openapi",
+        &[("accept", "text/html"), ("cookie", "auth=ok")],
+    )
+    .await;
 
     assert_eq!(response.status(), StatusCode::OK);
 

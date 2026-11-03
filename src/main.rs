@@ -1,6 +1,13 @@
 use std::net::SocketAddr;
 
-use kafka_api_gateway::{app, config::env, features::v1::health::service, logging};
+use kafka_api_gateway::{
+    app,
+    config::env,
+    db::{pool, postgres::PgStore},
+    features::v1::health::service,
+    logging,
+    state::AppState,
+};
 use tokio::{net::TcpListener, signal};
 
 #[tokio::main]
@@ -13,7 +20,26 @@ async fn main() -> std::io::Result<()> {
     // Records the start time so uptime counts from boot
     service::mark_started();
 
-    let port = env::env().app_port;
+    let env = env::env();
+
+    // The service pool connects now, the process exits if the database is not reachable
+    let service_pool = match pool::connect_service(env).await {
+        Ok(pool) => pool,
+        Err(error) => {
+            tracing::error!(target: "Db", "On-prem PostgreSQL connection failed (service): {error}");
+            std::process::exit(1);
+        }
+    };
+
+    tracing::info!(target: "Db", "On-prem PostgreSQL connected (service)");
+
+    // The default pool opens its first connection on first use
+    let default_pool = pool::connect_default_lazy(env);
+
+    let store = PgStore::new(default_pool, service_pool);
+    let state = AppState::from_pg(store.clone());
+
+    let port = env.app_port;
 
     // Listens on all interfaces so other machines on the network can connect
     let address = SocketAddr::from(([0, 0, 0, 0], port));
@@ -24,9 +50,12 @@ async fn main() -> std::io::Result<()> {
         "🚀 Kafka realtime gateway running on http://localhost:{port}"
     );
 
-    axum::serve(listener, app::router())
+    axum::serve(listener, app::router(state))
         .with_graceful_shutdown(shutdown_signal())
         .await?;
+
+    // Closes both database pools before the process exits
+    store.close().await;
 
     tracing::info!(target: "Server", "Shutdown complete");
 

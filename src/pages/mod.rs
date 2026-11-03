@@ -7,7 +7,7 @@ pub mod render;
 use axum::Router;
 
 // All HTML page routes, mounted at the root
-pub fn router() -> Router {
+pub fn router() -> Router<crate::state::AppState> {
     Router::new()
         .merge(home::router())
         .merge(about::router())

@@ -8,7 +8,9 @@ use utoipa::{
     },
 };
 
-use crate::errors::catalog::{CatalogEntry, bad_request, service_unavailable, unauthorized};
+use crate::errors::catalog::{
+    CatalogEntry, bad_request, conflict, internal_server_error, service_unavailable, unauthorized,
+};
 
 // Errors documented per operation, keyed by the operation id set in the handler annotation
 const OPERATION_ERRORS: &[(&str, &[CatalogEntry])] = &[
@@ -33,6 +35,31 @@ const OPERATION_ERRORS: &[(&str, &[CatalogEntry])] = &[
             unauthorized::MISSING_AUTH_HEADERS,
             bad_request::INVALID_HEADER_VALUES,
             service_unavailable::DB_PROBE_FAILED,
+        ],
+    ),
+    (
+        "auth_login",
+        &[
+            unauthorized::MISSING_AUTH_HEADERS,
+            bad_request::INVALID_HEADER_VALUES,
+            bad_request::INVALID_INPUT,
+            unauthorized::INVALID_CREDENTIALS,
+            internal_server_error::DATABASE_ERROR,
+            internal_server_error::TOKEN_SIGNING_FAILED,
+        ],
+    ),
+    (
+        "api_keys_create",
+        &[
+            unauthorized::MISSING_AUTH_HEADERS,
+            unauthorized::MISSING_AUTHORIZATION_TOKEN,
+            unauthorized::INVALID_TOKEN,
+            unauthorized::EXPIRED_TOKEN,
+            unauthorized::MISSING_SUB_OR_ROLE,
+            bad_request::INVALID_HEADER_VALUES,
+            bad_request::INVALID_INPUT,
+            conflict::DATABASE_CONFLICT,
+            internal_server_error::SERVER_ERROR,
         ],
     ),
 ];

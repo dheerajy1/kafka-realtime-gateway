@@ -6,6 +6,9 @@ use crate::components::layout::Layout;
 #[derive(Props, Clone, PartialEq)]
 pub struct LoginProps {
     pub title: String,
+
+    // Error shown as a toast above the form, None when the page is opened normally
+    pub error: Option<String>,
 }
 
 // Login page rendered inside the shared Layout
@@ -13,6 +16,14 @@ pub struct LoginProps {
 pub fn Login(props: LoginProps) -> Element {
     rsx! {
         Layout { title: props.title.clone(),
+            // CSS-only toast, the animate-toast animation hides it by itself after about 6 seconds
+            if let Some(message) = props.error.clone() {
+                div {
+                    role: "alert",
+                    class: "fixed top-4 right-4 z-50 max-w-sm border border-error bg-surface px-4 py-3 text-sm text-error animate-toast",
+                    "{message}"
+                }
+            }
             div { class: "flex items-center justify-center min-h-screen bg-bg px-4",
                 div { class: "w-full max-w-(--width-login-sm) md:max-w-(--width-login) bg-surface border border-border-thick p-8 md:p-12",
                     header { class: "text-center mb-6 md:mb-8",

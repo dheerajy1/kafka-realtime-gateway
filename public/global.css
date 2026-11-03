@@ -7,6 +7,7 @@
     sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
     --font-mono: "JetBrains Mono", monospace;
     --spacing: 0.25rem;
+    --container-sm: 24rem;
     --text-xs: 0.75rem;
     --text-xs--line-height: calc(1 / 0.75);
     --text-sm: 0.875rem;
@@ -57,6 +58,7 @@
     --width-health: 480px;
     --width-container: 1200px;
     --width-logo: 120px;
+    --animate-toast: toast 6s ease-in-out forwards;
   }
 }
 @layer base {
@@ -223,8 +225,17 @@
   .top-1\/2 {
     top: calc(1 / 2 * 100%);
   }
+  .top-4 {
+    top: calc(var(--spacing) * 4);
+  }
+  .right-4 {
+    right: calc(var(--spacing) * 4);
+  }
   .left-3 {
     left: calc(var(--spacing) * 3);
+  }
+  .z-50 {
+    z-index: 50;
   }
   .container {
     width: 100%;
@@ -316,9 +327,15 @@
   .max-w-\(--width-login-sm\) {
     max-width: var(--width-login-sm);
   }
+  .max-w-sm {
+    max-width: var(--container-sm);
+  }
   .-translate-y-1\/2 {
     --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);
     translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+  .animate-toast {
+    animation: var(--animate-toast);
   }
   .flex-col {
     flex-direction: column;
@@ -378,6 +395,9 @@
   }
   .border-border-thick {
     border-color: var(--color-border-thick);
+  }
+  .border-error {
+    border-color: var(--color-error);
   }
   .border-logo-border {
     border-color: var(--color-logo-border);
@@ -508,6 +528,9 @@
   }
   .text-warning {
     color: var(--color-warning);
+  }
+  .lowercase {
+    text-transform: lowercase;
   }
   .uppercase {
     text-transform: uppercase;
@@ -749,6 +772,26 @@
   syntax: "*";
   inherits: false;
   initial-value: 1;
+}
+@keyframes toast {
+  0% {
+    opacity: 0;
+    transform: translateY(-1rem);
+    visibility: visible;
+  }
+  8% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  85% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-1rem);
+    visibility: hidden;
+  }
 }
 @layer properties {
   @supports ((-webkit-hyphens: none) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color:rgb(from red r g b)))) {

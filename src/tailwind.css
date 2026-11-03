@@ -37,6 +37,30 @@
     --tracking-wider: 0.05em;
 
     --border-thickness: 1px;
+
+    /* Login error toast, it fades in, stays visible, then hides itself after about 6 seconds */
+    --animate-toast: toast 6s ease-in-out forwards;
+
+    @keyframes toast {
+        0% {
+            opacity: 0;
+            transform: translateY(-1rem);
+            visibility: visible;
+        }
+        8% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        85% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        100% {
+            opacity: 0;
+            transform: translateY(-1rem);
+            visibility: hidden;
+        }
+    }
 }
 
 @layer base {

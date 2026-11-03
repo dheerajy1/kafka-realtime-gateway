@@ -1,0 +1,129 @@
+~/dev/vs-code/kafka-api-gateway-rust
+
+./
+├── .env.development
+├── .env.example
+├── .env.production
+├── .github/
+│   ├── CODEOWNERS*
+│   ├── labeler.yml*
+│   ├── pull_request_template.md*
+│   └── workflows/
+│       ├── pr-check-template.yml*
+│       ├── pr-checks.yml*
+│       ├── release.yml*
+│       └── test.yml*
+├── .gitignore
+├── .releaserc.json*
+├── CHANGELOG.md
+├── Cargo.lock
+├── Cargo.toml
+├── LICENSE
+├── README.md
+├── docker/
+│   ├── Dockerfile
+│   └── docker-compose.yml
+├── docs/
+│   └── build.md
+├── public/
+│   ├── favicon.ico*
+│   ├── global.css
+│   └── logo.png
+├── src/
+│   ├── app.rs
+│   ├── auth/
+│   │   ├── jwt.rs
+│   │   ├── mod.rs
+│   │   └── password.rs
+│   ├── components/
+│   │   ├── about.rs
+│   │   ├── health_parts.rs
+│   │   ├── healthz.rs
+│   │   ├── healthz_app.rs
+│   │   ├── healthz_db.rs
+│   │   ├── home.rs
+│   │   ├── icons.rs
+│   │   ├── layout.rs
+│   │   ├── login.rs
+│   │   └── mod.rs
+│   ├── config/
+│   │   ├── env.rs
+│   │   └── mod.rs
+│   ├── db/
+│   │   ├── error.rs
+│   │   ├── mod.rs
+│   │   ├── pool.rs
+│   │   ├── postgres.rs
+│   │   └── store.rs
+│   ├── errors/
+│   │   ├── api_error.rs
+│   │   ├── catalog.rs
+│   │   ├── code.rs
+│   │   ├── fallback.rs
+│   │   ├── mod.rs
+│   │   └── panic.rs
+│   ├── features/
+│   │   ├── mod.rs
+│   │   └── v1/
+│   │       ├── api_keys/
+│   │       │   ├── handler.rs
+│   │       │   ├── mod.rs
+│   │       │   ├── model.rs
+│   │       │   └── service.rs
+│   │       ├── auth/
+│   │       │   ├── handler.rs
+│   │       │   ├── mod.rs
+│   │       │   ├── model.rs
+│   │       │   └── service.rs
+│   │       ├── health/
+│   │       │   ├── handler.rs
+│   │       │   ├── mod.rs
+│   │       │   ├── model.rs
+│   │       │   └── service.rs
+│   │       └── mod.rs
+│   ├── lib.rs
+│   ├── logging.rs
+│   ├── main.rs
+│   ├── middleware/
+│   │   ├── api_key.rs
+│   │   ├── auth.rs
+│   │   ├── cors.rs
+│   │   ├── mod.rs
+│   │   ├── no_auth.rs
+│   │   ├── server_gate.rs
+│   │   └── valid_json.rs
+│   ├── openapi/
+│   │   ├── errors.rs
+│   │   └── mod.rs
+│   ├── pages/
+│   │   ├── about.rs
+│   │   ├── healthz.rs
+│   │   ├── home.rs
+│   │   ├── login.rs
+│   │   ├── mod.rs
+│   │   └── render.rs
+│   ├── schemas/
+│   │   ├── auth.rs
+│   │   ├── env.rs
+│   │   ├── mod.rs
+│   │   └── response.rs
+│   ├── state.rs
+│   └── tailwind.css
+├── structure.txt
+├── tests/
+│   ├── api_auth.rs
+│   ├── common/
+│   │   ├── fakes.rs
+│   │   └── mod.rs
+│   ├── db_error.rs
+│   ├── errors.rs
+│   ├── gate.rs
+│   ├── health.rs
+│   ├── pages.rs
+│   └── portal_login.rs
+└── xtask/
+    ├── Cargo.toml
+    └── src/
+        └── main.rs
+
+25 directories, 100 files

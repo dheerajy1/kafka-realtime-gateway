@@ -72,7 +72,11 @@ async fn unified_health_returns_503_while_db_is_down() {
 // GET /healthz/app returns html for a browser
 #[tokio::test]
 async fn healthz_app_returns_html_for_browsers() {
-    let response = get("/healthz/app", &[("accept", "text/html")]).await;
+    let response = get(
+        "/healthz/app",
+        &[("accept", "text/html"), ("cookie", "auth=ok")],
+    )
+    .await;
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -85,7 +89,11 @@ async fn healthz_app_returns_html_for_browsers() {
 // GET /healthz/app returns json when Accept is not html
 #[tokio::test]
 async fn healthz_app_returns_json_for_api_clients() {
-    let response = get("/healthz/app", &[("accept", "application/json")]).await;
+    let response = get(
+        "/healthz/app",
+        &[("accept", "application/json"), ("cookie", "auth=ok")],
+    )
+    .await;
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -98,7 +106,11 @@ async fn healthz_app_returns_json_for_api_clients() {
 // GET /healthz/db returns 200 json that reports the database as down
 #[tokio::test]
 async fn healthz_db_reports_down_with_200() {
-    let response = get("/healthz/db", &[("accept", "application/json")]).await;
+    let response = get(
+        "/healthz/db",
+        &[("accept", "application/json"), ("cookie", "auth=ok")],
+    )
+    .await;
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -113,7 +125,11 @@ async fn healthz_db_reports_down_with_200() {
 // GET /healthz returns both the app and the db part as json
 #[tokio::test]
 async fn healthz_returns_app_and_db_json() {
-    let response = get("/healthz", &[("accept", "application/json")]).await;
+    let response = get(
+        "/healthz",
+        &[("accept", "application/json"), ("cookie", "auth=ok")],
+    )
+    .await;
 
     assert_eq!(response.status(), StatusCode::OK);
 

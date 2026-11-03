@@ -31,6 +31,9 @@ utoipa = "6"
 utoipa-scalar = { version = "0.4", features = ["axum"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres"] }
+async-trait = "0.1.92"
+getrandom = "0.4.3"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

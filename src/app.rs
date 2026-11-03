@@ -4,8 +4,9 @@ use tower_http::catch_panic::CatchPanicLayer;
 use crate::{
     errors::{fallback, panic::handle_panic},
     features::v1,
-    middleware::cors::cors_layer,
+    middleware::{cors::cors_layer, server_gate::server_gate},
     openapi, pages,
+    state::AppState,
 };
 
 // Largest request body accepted, 10 MB
@@ -35,8 +36,8 @@ async fn favicon() -> impl IntoResponse {
     )
 }
 
-// Full application router, shared by main and the tests
-pub fn router() -> Router {
+// Full application router, shared by main and the tests, the state carries the database access
+pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/global.css", get(global_css))
         .route("/logo.png", get(logo))
@@ -44,6 +45,8 @@ pub fn router() -> Router {
         .merge(pages::router())
         .merge(v1::router())
         .merge(openapi::router())
+        // Sends requests without the login cookie to the login page, it only wraps routes that exist
+        .route_layer(axum::middleware::from_fn(server_gate))
         // Unknown paths return the global 404 error shape
         .fallback(fallback::not_found)
         // Known paths with a wrong method return the global 405 error shape
@@ -54,4 +57,6 @@ pub fn router() -> Router {
         .layer(CatchPanicLayer::custom(handle_panic))
         // Outermost layer, answers preflight requests and adds CORS headers to every response
         .layer(cors_layer())
+        // Hands the shared state to every handler
+        .with_state(state)
 }

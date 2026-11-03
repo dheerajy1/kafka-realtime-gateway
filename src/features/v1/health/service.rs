@@ -4,6 +4,7 @@ use std::time::Instant;
 use chrono::{SecondsFormat, Utc};
 
 use super::model::{AppHealthData, DbConnection, DbHealthData, DbStatus};
+use crate::db::store::DbProbe;
 
 // Moment the process started, recorded on first use
 static STARTED_AT: LazyLock<Instant> = LazyLock::new(Instant::now);
@@ -23,11 +24,21 @@ pub fn get_app_health() -> AppHealthData {
     }
 }
 
-// Placeholder until Phase 2 adds the database, it always reports the database as down
-pub async fn get_db_health() -> DbHealthData {
-    DbHealthData {
-        status: DbStatus::Down,
-        database: DbConnection::Disconnected,
-        latency_ms: None,
+// Probes the database and measures how long the probe takes
+pub async fn get_db_health(probe: &dyn DbProbe) -> DbHealthData {
+    let start = Instant::now();
+
+    if probe.ping().await {
+        DbHealthData {
+            status: DbStatus::Up,
+            database: DbConnection::Connected,
+            latency_ms: Some(start.elapsed().as_millis() as u64),
+        }
+    } else {
+        DbHealthData {
+            status: DbStatus::Down,
+            database: DbConnection::Disconnected,
+            latency_ms: None,
+        }
     }
 }

@@ -1,4 +1,4 @@
-use axum::{Json, Router, routing::get};
+use axum::{Json, Router, extract::State, routing::get};
 
 use super::{
     model::{AppHealthData, DbHealthData, DbStatus, HealthData},
@@ -8,10 +8,11 @@ use crate::{
     errors::{api_error::ApiError, catalog::service_unavailable},
     middleware::no_auth::NoAuth,
     schemas::response::SuccessResponse,
+    state::AppState,
 };
 
 // Routes of the health feature, mounted under /api/v1/health
-pub fn router() -> Router {
+pub fn router() -> Router<crate::state::AppState> {
     Router::new()
         .route("/", get(health))
         .route("/app", get(app_health))
@@ -58,9 +59,12 @@ pub fn router() -> Router {
 )]
 
 // GET /api/v1/health
-pub async fn health(_auth: NoAuth) -> Result<Json<SuccessResponse<HealthData>>, ApiError> {
+pub async fn health(
+    State(state): State<AppState>,
+    _auth: NoAuth,
+) -> Result<Json<SuccessResponse<HealthData>>, ApiError> {
     let app = service::get_app_health();
-    let db = service::get_db_health().await;
+    let db = service::get_db_health(state.db_probe.as_ref()).await;
 
     // A database that is down fails the unified check with 503
     if db.status == DbStatus::Down {
@@ -145,8 +149,11 @@ pub async fn app_health(_auth: NoAuth) -> Json<SuccessResponse<AppHealthData>> {
 )]
 
 // GET /api/v1/health/db
-pub async fn db_health(_auth: NoAuth) -> Result<Json<SuccessResponse<DbHealthData>>, ApiError> {
-    let data = service::get_db_health().await;
+pub async fn db_health(
+    State(state): State<AppState>,
+    _auth: NoAuth,
+) -> Result<Json<SuccessResponse<DbHealthData>>, ApiError> {
+    let data = service::get_db_health(state.db_probe.as_ref()).await;
 
     // A database that is down returns 503
     if data.status == DbStatus::Down {

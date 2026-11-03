@@ -1,5 +1,6 @@
 use axum::{
     Json, Router,
+    extract::State,
     http::HeaderMap,
     response::{IntoResponse, Response},
     routing::get,
@@ -14,9 +15,10 @@ use crate::features::v1::health::{
     service,
 };
 use crate::schemas::response::SuccessResponse;
+use crate::state::AppState;
 
 // Routes of the health pages, each returns html for browsers and json otherwise
-pub fn router() -> Router {
+pub fn router() -> Router<crate::state::AppState> {
     Router::new()
         .route("/healthz", get(healthz))
         .route("/healthz/app", get(healthz_app))
@@ -24,9 +26,9 @@ pub fn router() -> Router {
 }
 
 // GET /healthz
-async fn healthz(headers: HeaderMap) -> Response {
+async fn healthz(State(state): State<AppState>, headers: HeaderMap) -> Response {
     let app = service::get_app_health();
-    let db = service::get_db_health().await;
+    let db = service::get_db_health(state.db_probe.as_ref()).await;
 
     if wants_html(&headers) {
         return render_with_props(
@@ -66,8 +68,8 @@ async fn healthz_app(headers: HeaderMap) -> Response {
 }
 
 // GET /healthz/db
-async fn healthz_db(headers: HeaderMap) -> Response {
-    let data = service::get_db_health().await;
+async fn healthz_db(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let data = service::get_db_health(state.db_probe.as_ref()).await;
 
     if wants_html(&headers) {
         return render_with_props(
