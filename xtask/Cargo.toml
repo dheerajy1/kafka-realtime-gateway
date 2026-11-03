@@ -1,0 +1,10 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+kafka-api-gateway = { path = ".." }
+dotenvy = "0.15"
+bcrypt = "0.19"
