@@ -237,6 +237,9 @@
   .z-50 {
     z-index: 50;
   }
+  .order-1 {
+    order: 1;
+  }
   .container {
     width: 100%;
     @media (width >= 40rem) {

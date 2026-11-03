@@ -59,3 +59,29 @@ pub trait DbProbe: Send + Sync {
     // Runs SELECT 1 on the default pool, true when it succeeds
     async fn ping(&self) -> bool;
 }
+
+// One row of fn_get_gateway_kafka_topics, the routing policy of a topic
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TopicRow {
+    // Kafka topic name
+    pub topic_name: String,
+
+    // The gateway consumes this topic and forwards it to subscribers
+    pub gateway_consume: bool,
+
+    // A subscriber must acknowledge each message before its offset is committed
+    pub ack_required: bool,
+
+    // Subscribers may publish to this topic over the WebSocket
+    pub subscriber_publish_allowed: bool,
+
+    // Disabled topics are ignored completely
+    pub enabled: bool,
+}
+
+// Loads the topic routing policy
+#[async_trait]
+pub trait TopicStore: Send + Sync {
+    // Calls fn_get_gateway_kafka_topics, returns every row including disabled ones
+    async fn load_topics(&self) -> Result<Vec<TopicRow>, ApiError>;
+}

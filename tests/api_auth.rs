@@ -42,7 +42,7 @@ fn store_and_state() -> (Arc<FakeStore>, AppState) {
             .with_api_key("key-1", "s3cret"),
     );
 
-    let state = AppState::new(store.clone(), store.clone(), store.clone());
+    let state = common::state_from_arc(store.clone());
 
     (store, state)
 }

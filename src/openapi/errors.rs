@@ -9,7 +9,8 @@ use utoipa::{
 };
 
 use crate::errors::catalog::{
-    CatalogEntry, bad_request, conflict, internal_server_error, service_unavailable, unauthorized,
+    CatalogEntry, bad_gateway, bad_request, conflict, forbidden, gateway_timeout,
+    internal_server_error, not_found, payload_too_large, service_unavailable, unauthorized,
 };
 
 // Errors documented per operation, keyed by the operation id set in the handler annotation
@@ -62,6 +63,37 @@ const OPERATION_ERRORS: &[(&str, &[CatalogEntry])] = &[
             internal_server_error::SERVER_ERROR,
         ],
     ),
+    (
+        "http_publish",
+        &[
+            unauthorized::MISSING_AUTH_HEADERS,
+            unauthorized::MISSING_API_KEY,
+            unauthorized::INVALID_API_KEY,
+            bad_request::INVALID_HEADER_VALUES,
+            bad_request::INVALID_INPUT,
+            forbidden::ACCESS_DENIED,
+            not_found::RESOURCE_NOT_FOUND,
+            payload_too_large::KAFKA_MESSAGE_TOO_LARGE,
+            internal_server_error::DATABASE_ERROR,
+            internal_server_error::THIRD_PARTY_ERROR,
+            bad_gateway::UPSTREAM_UNAVAILABLE,
+            gateway_timeout::UPSTREAM_TIMEOUT,
+        ],
+    ),
+    (
+        "topics_reload",
+        &[
+            unauthorized::MISSING_AUTH_HEADERS,
+            unauthorized::MISSING_API_KEY,
+            unauthorized::INVALID_API_KEY,
+            bad_request::INVALID_HEADER_VALUES,
+            internal_server_error::DATABASE_ERROR,
+            internal_server_error::THIRD_PARTY_ERROR,
+            bad_gateway::UPSTREAM_UNAVAILABLE,
+            gateway_timeout::UPSTREAM_TIMEOUT,
+        ],
+    ),
+    ("ws_subscribe", &[bad_request::INVALID_HEADER_VALUES]),
 ];
 
 // Builds one response per http status, each with a named example per catalogue entry

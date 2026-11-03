@@ -3,9 +3,11 @@ use std::process::{Command, exit};
 
 use kafka_api_gateway::config::env::Env;
 
+mod ws_test;
+
 fn main() {
     let task = env::args().nth(1).unwrap_or_else(|| {
-        eprintln!("Usage: cargo <css|dev|start|build-prod|hash>");
+        eprintln!("Usage: cargo <css|dev|start|build-prod|hash|test-ws>");
         exit(1);
     });
 
@@ -15,6 +17,7 @@ fn main() {
         "start" => run_server("production", true),
         "build" => run_build(),
         "hash" => run_hash(env::args().nth(2)),
+        "test-ws" => run_test_ws(env::args().nth(2), env::args().nth(3), env::args().nth(4)),
         _ => {
             eprintln!("Unknown task: {task}");
             exit(1);
@@ -66,11 +69,24 @@ fn run_server(profile: &str, release: bool) {
         cmd.arg("--release");
     }
 
-    let status = cmd
-        .status()
-        .expect("Failed to execute cargo run for kafka-api-gateway");
+    // On Unix this process is replaced by the gateway, so Ctrl+C reaches only the gateway and the prompt returns after its shutdown finished
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
 
-    exit(status.code().unwrap_or(1));
+        let error = cmd.exec();
+        eprintln!("Failed to execute cargo run for kafka-api-gateway: {error}");
+        exit(1);
+    }
+
+    #[cfg(not(unix))]
+    {
+        let status = cmd
+            .status()
+            .expect("Failed to execute cargo run for kafka-api-gateway");
+
+        exit(status.code().unwrap_or(1));
+    }
 }
 
 // Validates the production env, compiles Tailwind CSS, then builds in release mode
@@ -101,4 +117,29 @@ fn run_hash(value: Option<String>) {
             exit(1);
         }
     }
+}
+
+// Runs the WebSocket scenario against the gateway that is already running with the development env
+fn run_test_ws(api_key: Option<String>, api_secret: Option<String>, mode: Option<String>) {
+    let (Some(api_key), Some(api_secret)) = (api_key, api_secret) else {
+        eprintln!("Usage: cargo test-ws 'api-key-id' 'api-key-secret' [hold]");
+        exit(1);
+    };
+
+    let env = load_env("development");
+
+    let args = ws_test::Args {
+        base: format!("localhost:{}", env.app_port),
+        client_id: env.client_id.clone(),
+        client_secret: env.client_secret.clone(),
+        api_key,
+        api_secret,
+    };
+
+    // The hold mode waits for the gateway to shut down instead of running the scenario
+    if mode.as_deref() == Some("hold") {
+        exit(if ws_test::hold(&args) { 0 } else { 1 });
+    }
+
+    exit(if ws_test::run(&args) { 0 } else { 1 });
 }

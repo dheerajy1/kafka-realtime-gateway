@@ -8,6 +8,8 @@ use self::errors::ErrorExamples;
 use crate::{
     features::v1::{
         api_keys::handler as api_keys, auth::handler as auth, health::handler as health,
+        http_publish::handler as http_publish, topics::handler as topics,
+        ws_publish::handler as ws_publish, ws_subscribe::handler as ws_subscribe,
     },
     schemas::response::ErrorResponse,
     state::AppState,
@@ -22,7 +24,11 @@ use crate::{
         health::app_health,
         health::db_health,
         auth::login,
-        api_keys::create_api_key
+        api_keys::create_api_key,
+        http_publish::http_publish,
+        topics::reload_topics,
+        ws_publish::ws_publish,
+        ws_subscribe::ws_subscribe
     ),
     components(schemas(ErrorResponse)),
     modifiers(&ErrorExamples)

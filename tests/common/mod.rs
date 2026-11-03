@@ -10,11 +10,18 @@ use axum::{
     http::{Request, Response},
 };
 use http_body_util::BodyExt;
-use kafka_api_gateway::state::AppState;
+use kafka_api_gateway::{
+    kafka::{
+        registry::{TopicPolicy, TopicRegistry},
+        subscribers::SubscriberRegistry,
+    },
+    state::{AppState, KafkaDeps},
+};
 use serde_json::Value;
+use tokio::sync::{mpsc, watch};
 use tower::ServiceExt;
 
-use self::fakes::FakeStore;
+use self::fakes::{FakePublisher, FakeReloader, FakeStore};
 
 // Credentials the tests configure and send
 pub const TEST_CLIENT_ID: &str = "test-client";
@@ -46,11 +53,80 @@ pub fn setup_env() {
     });
 }
 
+// Fakes for the Kafka side of the state that a test can inspect and steer
+pub struct KafkaFakes {
+    // Records what was published
+    pub publisher: Arc<FakePublisher>,
+
+    // Records the reload requests
+    pub reloader: Arc<FakeReloader>,
+
+    // The connected WebSocket subscribers
+    pub subscribers: Arc<SubscriberRegistry>,
+
+    // Send true to simulate a shutdown, it must stay alive as long as the state is used
+    pub stop: watch::Sender<bool>,
+}
+
+impl KafkaFakes {
+    pub fn new() -> Self {
+        let (stop, _) = watch::channel(false);
+
+        Self {
+            publisher: Arc::new(FakePublisher::new()),
+            reloader: Arc::new(FakeReloader::new()),
+            subscribers: Arc::new(SubscriberRegistry::new()),
+            stop,
+        }
+    }
+}
+
+// Builds the app state from a shared fake store and the Kafka fakes, the registry is loaded from the store's topics
+pub fn state_with_kafka(store: Arc<FakeStore>, fakes: &KafkaFakes) -> AppState {
+    let topics = Arc::new(TopicRegistry::default());
+    topics.replace(Arc::new(TopicPolicy::from_rows(store.topic_rows())));
+
+    AppState::new(
+        store.clone(),
+        store.clone(),
+        store,
+        KafkaDeps {
+            topics,
+            publisher: fakes.publisher.clone(),
+            reloader: fakes.reloader.clone(),
+            subscribers: fakes.subscribers.clone(),
+            shutdown: fakes.stop.subscribe(),
+            ws_drain: mpsc::channel(1).0,
+        },
+    )
+}
+
+// Builds the app state from a shared fake store and a fake publisher, the other Kafka fakes are fresh ones
+fn build_state(store: Arc<FakeStore>, publisher: Arc<FakePublisher>) -> AppState {
+    let mut fakes = KafkaFakes::new();
+    fakes.publisher = publisher;
+
+    let state = state_with_kafka(store, &fakes);
+
+    // The stop sender is kept alive for the rest of the test run so the shutdown channel never reads as closed
+    std::mem::forget(fakes.stop);
+
+    state
+}
+
+// Wraps a shared fake store as the app state, with a fresh fake publisher
+pub fn state_from_arc(store: Arc<FakeStore>) -> AppState {
+    build_state(store, Arc::new(FakePublisher::new()))
+}
+
 // Wraps one fake store as the app state, it plays all three database roles
 pub fn state_from(store: FakeStore) -> AppState {
-    let store = Arc::new(store);
+    state_from_arc(Arc::new(store))
+}
 
-    AppState::new(store.clone(), store.clone(), store)
+// Wraps one fake store as the app state with the given fake publisher, so the test can read what was published
+pub fn state_with_publisher(store: FakeStore, publisher: Arc<FakePublisher>) -> AppState {
+    build_state(Arc::new(store), publisher)
 }
 
 // Default test state, an empty fake store with the database down

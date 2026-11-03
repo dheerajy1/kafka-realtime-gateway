@@ -8,3 +8,5 @@ publish = false
 kafka-api-gateway = { path = ".." }
 dotenvy = "0.15"
 bcrypt = "0.19"
+tungstenite = "0.29"
+serde_json = "1.0.154"

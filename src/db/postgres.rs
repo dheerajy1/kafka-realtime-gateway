@@ -3,7 +3,7 @@ use sqlx::PgPool;
 
 use super::{
     error::map_db_error,
-    store::{ApiKeyRecord, ApiKeyStore, ApiUserRecord, DbProbe, UserStore},
+    store::{ApiKeyRecord, ApiKeyStore, ApiUserRecord, DbProbe, TopicRow, TopicStore, UserStore},
 };
 use crate::errors::{
     api_error::ApiError,
@@ -134,5 +134,39 @@ impl DbProbe for PgStore {
             .execute(&self.default_pool)
             .await
             .is_ok()
+    }
+}
+
+#[async_trait]
+impl TopicStore for PgStore {
+    async fn load_topics(&self) -> Result<Vec<TopicRow>, ApiError> {
+        let rows = sqlx::query_as::<_, (String, bool, bool, bool, bool)>(
+            "SELECT topic_name, gateway_consume, ack_required, subscriber_publish_allowed, enabled \
+             FROM fn_get_gateway_kafka_topics()",
+        )
+        .fetch_all(&self.service_pool)
+        .await
+        .map_err(|error| map_db_error(&error))?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(
+                    topic_name,
+                    gateway_consume,
+                    ack_required,
+                    subscriber_publish_allowed,
+                    enabled,
+                )| {
+                    TopicRow {
+                        topic_name,
+                        gateway_consume,
+                        ack_required,
+                        subscriber_publish_allowed,
+                        enabled,
+                    }
+                },
+            )
+            .collect())
     }
 }

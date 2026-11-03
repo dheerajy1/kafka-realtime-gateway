@@ -210,6 +210,16 @@ Max 5 connections and 120 s idle timeout per pool. The app never selects the `ka
 | D26 | Portal login input check: `username` min 1 and `password` min 6, returned as 400 before the DB lookup. The old route required 6 and its second schema only 1. | `[DECIDED]` |
 | D27 | `sqlx` 0.9 instead of the 0.8 first locked (0.9.0 was the latest on crates.io). The store traits use the `async-trait` crate, and the API key secret is 32 random bytes from the `getrandom` crate, hex encoded. | `[DECIDED]` |
 | D28 | The service pool connects at boot and the process exits if it cannot. The default pool is lazy and opens its first connection on first use. Both pools use no TLS. | `[DECIDED]` |
+| D29 | The producer, the admin client and the consumer connect at boot and the process exits if a broker is not reachable. The enabled topics are checked against Kafka at startup and a missing topic is fatal. | `[DECIDED]` |
+| D30 | Kafka failures map to specific catalogue errors for the common cases: message too large 413 `KAFKA_MESSAGE_TOO_LARGE` (new entry), topic missing on the broker 404 `RESOURCE_NOT_FOUND`, timeouts 504 `UPSTREAM_TIMEOUT`, broker down or retries exhausted 502 `UPSTREAM_UNAVAILABLE`, everything else 500 `THIRD_PARTY_ERROR`. | `[DECIDED]` |
+| D31 | A topic reload replaces the whole in-memory policy, so a disabled topic or a changed flag applies without a restart. The Kafka subscription only grows. When a message of a topic that is disabled or no longer consumed arrives, its partition is paused and nothing is committed, so the messages wait in Kafka and are delivered after the topic is enabled again (resume on the next reload). The old gateway dropped and committed them. | `[DECIDED]` |
+| D32 | No periodic polling of the topics table. Reloads happen at startup and on `POST /api/v1/topics/reload` (client credentials and an API key). A reload logs only when topics or flags changed or when the set of topics missing from Kafka changed. The old gateway polled every 60 s and logged on every run. A database notification is planned later (section 9). | `[DECIDED]` |
+| D33 | Each WebSocket subscriber has an outbound queue of 1000 frames. When it is full the gateway removes that subscriber and closes its connection with code 1013 so it can reconnect. Other subscribers are not affected. | `[DECIDED]` |
+| D34 | If the Kafka consumer cannot poll, the gateway keeps running (HTTP and WebSocket stay up) and retries every 3 s. The same error is logged once. | `[DECIDED]` |
+| D35 | A consumer group without a committed offset starts at the latest offset, like the old kafkajs default. Offsets are committed after every processed message, auto commit is off, and the fetch size per partition is 11 MiB. | `[DECIDED]` |
+| D36 | Graceful shutdown limit is 8 s from the signal, under Docker's default 10 s stop timeout. Open WebSockets get close code 1001, pending ACK waits fail without a commit, the gateway waits for the WebSocket tasks, then closes consumer, producer and DB pools. After 8 s the process logs an error and exits with code 1. | `[DECIDED]` |
+| D37 | `cargo dev` replaces the `xtask` process with the gateway (Unix), so Ctrl+C reaches only the gateway and the prompt returns after the shutdown. | `[DECIDED]` |
+| D38 | `cargo test-ws 'api-key' 'api-secret' [hold]` runs a 40 step WebSocket scenario against a running gateway and broker. It needs the topics `gateway-test` (consume, no ACK, subscriber publish allowed) and `gateway-test-ack` (consume, ACK required, subscriber publish allowed) in Kafka and in `kafka_topic`. The `hold` mode checks the 1001 close. `xtask` depends on `tungstenite` and `serde_json`. | `[DECIDED]` |
 
 ## 4. Behavior of the old gateway to replicate
 
@@ -227,7 +237,7 @@ Max 5 connections and 120 s idle timeout per pool. The app never selects the `ka
 
 ### 4.3 Producer
 
-Connects lazily on first use and is reused. Messages carry a key and optional headers. The reply carries the partition and offset. Acks are the broker's "all" setting in the old client. Confirm the matching `kafkit-client` setting in Phase 3 `[VERIFY]`.
+Connects at boot (D29) and is reused. Messages carry a key and optional headers. The reply carries the partition and offset. Acks all: `with_acks(-1)` plus `with_enable_idempotence(true)`. `max_request_size` is 11 MiB for the 10 MB message limit.
 
 ### 4.4 Consumer bridge
 
@@ -279,7 +289,7 @@ On `SIGTERM` or Ctrl-C, in this order:
 5. Flush the producer.
 6. Close the DB pools and exit.
 
-Add a hard time limit so a stuck step cannot block exit forever. Choose the number during Phase 3 with the user `[ASK]`.
+Hard time limit: 8 s from the signal `[DECIDED]` (D36). A watchdog logs an error and exits with code 1 if the shutdown is still running after that.
 
 ## 5. Target layout
 
@@ -347,12 +357,14 @@ Goal: real DB access and every auth path.
 - Tests with in-memory fakes: gate order, cookie flags, login failures (401, 400, 500) rendering HTML, JWT claims, wrong client header returns 400, API key failures.
 - Done when: all auth tests pass and the portal login works against the real DB.
 
-### Phase 3: Kafka
+### Phase 3: Kafka `[DONE]`
+
+Status: finished and hand-verified on 2026-11-03. Clippy and `cargo test` are clean with 187 tests. `cargo test-ws` passes 40 steps against the real broker (auth, subscribe, publish, ACK owner and redelivery, ws-publish, 9 MB and 11 MB messages) and the 1001 close on shutdown was verified with `cargo test-ws ... hold`. Decisions D29 to D38 came out of this phase. Migrations and the topic change notification are not part of it (section 9).
 
 Goal: publish, consume and the WebSocket endpoints.
 - First, a small `[VERIFY]` spike for the open `kafkit-client` questions in section 8 before writing the bridge.
-- Producer: lazy connect, `max_request_size` raised for 10 MB, key and headers, returns partition and offset.
-- Topic registry: startup load, 60 s reload (additions only), startup Kafka topic check (fatal), runtime check (log only).
+- Producer: connects at boot, `max_request_size` raised for 10 MB, key and headers, returns partition and offset.
+- Topic registry: startup load, startup Kafka topic check (fatal), reload on `POST /api/v1/topics/reload` that replaces the whole policy (D31, D32), no polling.
 - `POST /api/v1/http-publish` with the D5 topic check.
 - Subscriber registry (monotonic IDs), pending ACKs, owner selection, delivery.
 - Consumer bridge per 4.4, with `auto_offset_reset` set to latest.
@@ -382,28 +394,30 @@ API surface found:
 Differences from the old client that must be handled:
 - `auto_offset_reset` defaults to earliest. The old consumer effectively used latest. Set latest, otherwise a new group would replay the whole topic.
 - Producer `max_request_size` defaults to 1 MiB. Raise it for the 10 MB limit.
-- `fetch_max_bytes` defaults to 50 MiB, which is enough. No per-partition fetch setting was found. Check `[VERIFY]` that records larger than 1 MB can be consumed.
+- `fetch_max_bytes` defaults to 50 MiB, which is enough. `partition_max_bytes` defaults to 1 MiB and is set to 11 MiB in the consumer. `[DONE]` A 9 MB message was consumed through the bridge on 2026-11-03.
 
-`[VERIFY]` in the Phase 3 spike:
-1. Does `subscribe` replace the subscription or add to it? The plan assumes it replaces, so the full topic list is passed each time.
-2. Does `subscribe` with a smaller list drop topics cleanly? This decides the later topic-removal feature.
-3. Which admin call lists topics for the startup check?
-4. Is `commit_offsets` expected to receive `offset + 1`, as in Kafka's "next offset to read" rule?
-5. Does `seek` back to the failed record work while other partitions keep flowing, and does pause and resume behave as documented?
-6. Which producer setting matches the old "acks all"?
+Spike results (2026-11-01, run against the local apache/kafka:4.1.0 broker with `examples/kafka_spike.rs`):
+1. `[DONE]` `subscribe` replaces the subscription. The full topic list is passed each time.
+2. `[DONE]` `subscribe` with a smaller list drops the removed topic cleanly. The later topic-removal feature is possible.
+3. `[DONE]` `KafkaAdmin::list_topics()` for the startup check. `KafkaConsumer::list_topics()` also exists.
+4. `[DONE]` `commit_offsets` expects `offset + 1`. Committing 10+1 made the broker report 11.
+5. `[DONE]` `seek` back on one partition replays it while other partitions keep flowing. `pause` and `resume` work.
+6. `[DONE]` `with_acks(-1)` plus `with_enable_idempotence(true)`.
+7. `[DONE]` Consuming records above 1 MB. A 2 MiB send was rejected with `MessageTooLarge` because the broker limit is still 1 MB. Retest after the user raises the broker and topic limits.
 
 Broker side (done by the user, not by the gateway): to carry messages above 1 MB, raise the broker `message.max.bytes` and the topic `max.message.bytes`. Check the replica fetch limit too. Kafka does not reserve memory for the limit. It is only a ceiling.
 
 ## 9. Deferred and later
 
 1. `release.yml` (semantic-release for Rust). Not decided: the user could not find suitable Rust release YAML and needs to choose crates. Do this last, after Phase 4.
-2. Topic removal or disable without restart: an auth-protected API endpoint. Own phase after parity. Depends on `[VERIFY]` items 1 and 2 in section 8.
+2. Topic removal from the Kafka subscription without a restart. Not needed for disabling: a reload already stops delivery (D31). Depends on `[VERIFY]` items 1 and 2 in section 8.
+2a. Database scripts applied by the application: `sqlx` migrations (versioned SQL files in `migrations/`, `migrate` and `macros` features), run with a separate login `kag_proj_migrator` that owns the objects and has its own env setting, because `kag_proj_service` only has data and EXECUTE rights. The same step adds a trigger on `kafka_topic` with `LISTEN/NOTIFY` so the gateway reloads by itself, switchable by a config setting. The user also wants the migrator to have the smallest rights possible. Postgres owners always keep read rights on their own tables, so the protection is the separate login.
 3. Sign the portal cookie (for example a JWT in the cookie) so it cannot be forged. The user wants plain `ok` for now.
 4. There is no portal logout in the old gateway. None planned.
 
 ## 10. Open items and risks
 
-1. `[ASK]` Hard time limit for graceful shutdown (4.7). Decide in Phase 3.
+1. `[DONE]` Hard time limit for graceful shutdown: 8 s (D36).
 2. `[DONE]` Password hashes checked on the live database on 2026-10-30: 0 rows starting with `$argon2` in `api_keys`, `api_users` and `portal_users`, so bcrypt-only verification (D18) is safe. Note for later: the old `POST /api/v1/api-keys` hashed with argon2id by default, so re-check if keys are ever created through the old TypeScript gateway again.
 3. `[DONE]` On 2026-10-31 the live database showed `kag_proj_public` had no `SELECT` on `api_users`, so the API login would have failed. It was granted by hand with `GRANT SELECT ON public.api_users TO kag_proj_public;`. Update `kafka_api_gateway_db/logins/create_login_kag_proj_public.sql` to match: it uses `ON ALL TABLE`, `ON ALL SEQUENCE` and `ON ALL FUNCTION` (the plural `TABLES`, `SEQUENCES` and `FUNCTIONS` is the valid wording) and ends with `REVOKE SELECT ON TABLE public.portal_users ... TO` (`REVOKE` takes `FROM`), so it does not grant what it intends.
 4. The seed files in `kafka_api_gateway_db/data` hold plaintext secrets and passwords. Keep them out of any public repo.

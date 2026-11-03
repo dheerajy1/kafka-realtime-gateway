@@ -225,6 +225,12 @@ pub mod payload_too_large {
         "One or more parts of the multipart request are too large.",
         "Multipart payload exceeds limit",
     );
+
+    pub const KAFKA_MESSAGE_TOO_LARGE: CatalogEntry = CatalogEntry::new(
+        ErrorCode::PayloadTooLarge,
+        "The message is too large for the Kafka broker to accept.",
+        "Kafka message exceeds limit",
+    );
 }
 
 // 415 entries
