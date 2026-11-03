@@ -2,11 +2,16 @@ import { jwtVal } from "@/lib/constants";
 import { fnVerifyApiKey } from "@/lib/db-scripts/fn-verify-api-key";
 import { env } from "@/lib/env";
 import { MyError, errors } from "@/lib/errors";
+import { wsSubscriberState } from "@/lib/ws-subscriber/ws-subscriber-state";
 import {
+  ApiKeyAuthContext,
   AuthHeadersSchema,
+  CtxAuthError,
   NoAuthHeadersSchema,
+  WsSubscriberContext,
   apiKeyAuthHeadersSchema,
-} from "@/types/auth";
+} from "@/schemas/auth.schema";
+import { wsSubscriberMetadataSchema } from "@/schemas/ws-subscribe.schema";
 import { jwt } from "@elysiajs/jwt";
 import { Elysia } from "elysia";
 
@@ -149,7 +154,7 @@ export const Auth = new Elysia().use(jwt(jwtVal)).macro({
 // This runs when you write .guard({ apiKey: true }) or .post(..., { apiKey: true })
 export const apiKeyAuth = new Elysia().use(NoAuth).macro("apiKey", {
   noAuth: true,
-  resolve: async ({ ctx }) => {
+  resolve: async ({ ctx }): Promise<{ ctx: ApiKeyAuthContext }> => {
     try {
       const { headers } = ctx;
 
@@ -177,7 +182,7 @@ export const apiKeyAuth = new Elysia().use(NoAuth).macro("apiKey", {
       const { "x-api-key": xApiKey, "x-api-secret": xApiSecret } =
         parseResult.data;
 
-      // Resolve + validate API key metadata via SP
+      // Resolve and validate API key metadata via SP
       const { success, data } = await fnVerifyApiKey({
         xApiKey,
       });
@@ -204,18 +209,20 @@ export const apiKeyAuth = new Elysia().use(NoAuth).macro("apiKey", {
         });
       }
 
+      const authError: CtxAuthError = {
+        code: null,
+        httpCode: null,
+        message: null,
+        error: null,
+      };
+
       // Attach context
       return {
         ctx: {
           headers: Object.assign({}, ctx.headers, parseResult.data),
           xApiKey,
           apiUserId: data.apiUserId,
-          authError: {
-            code: null,
-            httpCode: null,
-            message: null,
-            error: null,
-          },
+          authError,
         },
       };
     } catch (err: unknown) {
@@ -228,18 +235,44 @@ export const apiKeyAuth = new Elysia().use(NoAuth).macro("apiKey", {
               error: errors.INTERNAL_SERVER_ERROR.SERVER_ERROR.error,
             });
 
+      const authError: CtxAuthError = {
+        code: myErr.code,
+        httpCode: myErr.httpCode,
+        message: myErr.message,
+        error: myErr.error,
+      };
+
       return {
         ctx: {
+          headers: ctx.headers,
           xApiKey: "",
           apiUserId: -1,
-          authError: {
-            code: myErr.code,
-            httpCode: myErr.httpCode,
-            message: myErr.message,
-            error: myErr.error,
-          },
+          authError,
         },
       };
     }
+  },
+});
+
+export const wsSubscriberAuth = new Elysia().use(NoAuth).macro("wsSubscriber", {
+  noAuth: true,
+  resolve: ({ ctx }): { ctx: WsSubscriberContext } => {
+    const parseResult = wsSubscriberMetadataSchema.safeParse(ctx.headers);
+
+    if (!parseResult.success) {
+      throw new MyError({
+        code: "BAD_REQUEST",
+        message: errors.BAD_REQUEST.INVALID_HEADER_VALUES.message,
+        error: errors.BAD_REQUEST.INVALID_HEADER_VALUES.error,
+      });
+    }
+
+    return {
+      ctx: {
+        xSubscriberId: parseResult.data["x-subscriber-id"],
+        subscriberId: ++wsSubscriberState.subscriberCounter,
+        subscriptions: new Set<string>(),
+      },
+    };
   },
 });

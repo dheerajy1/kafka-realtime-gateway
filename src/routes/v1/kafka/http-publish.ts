@@ -1,74 +1,72 @@
-import { isoNowIST } from "@/lib/isoNowIST";
+import { MyError, errors } from "@/lib/errors";
 import { getProducer } from "@/lib/producer.kafka";
 import { apiKeyAuth } from "@/middleware/auth";
-import crypto from "crypto";
+import {
+  httpPublishRequestSchema,
+  httpPublishResponseSchema,
+} from "@/schemas/http-publish.schema";
 import { Elysia } from "elysia";
-import z from "zod";
 
+/**
+ * Generic Kafka HTTP publish endpoint.
+ *
+ * Authenticates the request, validates the transport envelope,
+ * publishes `value` to `topic` with Kafka key = correlationId,
+ * and returns a defined 202 response.
+ *
+ * No domain-specific status events or topic hardcoding.
+ */
 export default new Elysia()
   .use(apiKeyAuth)
   .guard({ apiKey: true })
   .post(
     "/http-publish",
     async ({ ctx, body, status }) => {
-
-      const { xApiKey, apiUserId } = ctx
-      const { topic, jobName } = body;
-
-      // correlation id for tracing (Kafka later)
-      const correlationId = crypto.randomUUID();
+      if (ctx?.authError?.code != null) {
+        throw new MyError({
+          code: (ctx.authError.code as keyof typeof errors) || "UNAUTHORIZED",
+          message:
+            ctx.authError.message ||
+            errors.UNAUTHORIZED.INVALID_API_KEY.message,
+          error:
+            ctx.authError.error || errors.UNAUTHORIZED.INVALID_API_KEY.error,
+        });
+      }
 
       const producer = await getProducer();
 
       await producer.send({
-        topic,
+        topic: body.topic,
         messages: [
           {
-            key: xApiKey,
-            value: JSON.stringify({
-              correlationId,
-              apiUserId: apiUserId,
-              jobName,
-              timestamp: new Date().toISOString(),
-            }),
+            key: body.correlationId,
+            value: JSON.stringify(body.value),
           },
         ],
       });
 
-      console.log(`${isoNowIST()}\t [Publisher:Action]\t EVENT Published Topic: ${topic}`);
-
       return status(202, {
-        success: true,
-        statusCode: 202,
+        success: true as const,
+        statusCode: 202 as const,
         message: "Event accepted",
         data: {
-          topic,
-          correlationId,
+          topic: body.topic,
+          correlationId: body.correlationId,
         },
       });
     },
     {
-      body: z.object({
-        topic: z.string().min(1),
-        jobName: z.string().min(1),
-      }),
-      // headers: apiKeyAuthHeadersSchema,
+      body: httpPublishRequestSchema,
       response: {
-        202: z.object({
-          success: z.literal(true),
-          statusCode: z.literal(202),
-          message: z.string(),
-          data: z.object({
-            topic: z.string(),
-            correlationId: z.uuid(),
-          }),
-        })
+        202: httpPublishResponseSchema,
       },
       detail: {
         tags: ["Publish"],
-        summary: "HTTP publish event",
+        summary: "Publish a message to a Kafka topic",
         description:
-          "Publish an event via HTTP using API key authentication",
+          "Accepts a generic transport envelope (topic, correlationId, value). " +
+          "Publishes the value to the supplied topic using correlationId as the Kafka message key. " +
+          "Returns 202 after Kafka acceptance. No domain-specific processing.",
       },
-    }
+    },
   );

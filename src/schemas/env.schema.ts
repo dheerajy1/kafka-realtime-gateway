@@ -1,6 +1,12 @@
 import { z } from "zod";
 
 export const envSchema = z.object({
+  APP_PORT: z.coerce
+    .number()
+    .int()
+    .positive()
+    .describe("Port for application service"),
+
   JWT_SECRET: z
     .string()
     .trim()
@@ -117,12 +123,25 @@ export const envSchema = z.object({
       message: "APP_ENV must be under 50 characters long",
     })
     .describe("App environment"),
-
+  // ============================
+  // KAFKA
+  // ============================
   KAFKA_BROKERS: z
     .string()
     .trim()
     .min(1, { message: "KAFKA_BROKERS is required and cannot be empty" })
     .describe("Comma-separated list of Kafka broker addresses"),
+
+  KAFKA_CLIENT_ID: z
+    .string()
+    .trim()
+    .min(1, { message: "KAFKA_CLIENT_ID is required and cannot be empty" })
+    .max(100, {
+      message: "KAFKA_CLIENT_ID must be under 100 characters long",
+    })
+    .describe(
+      "Kafka client id for kafka-api-gateway (used to identify the producer/consumer application)",
+    ),
 
   KAFKA_GROUP_ID: z
     .string()
