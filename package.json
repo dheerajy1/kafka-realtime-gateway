@@ -13,6 +13,7 @@
     "build": "bun run clean && bunx tailwindcss -i ./src/tailwind.css -o ./public/global.css && tsc && tsc-alias && cp -r public dist/public",
     "start": "bun --env-file=.env.production dist/server.js",
     "clean": "rm -rf dist/* dist/.* || true",
+    "clean:nm": "rm -rf node_modules",
     "hash": "bun src/scripts/hash.ts",
     "docker:build": "docker compose -f docker/docker-compose.yml build",
     "docker:up": "docker compose -f docker/docker-compose.yml up -d",
