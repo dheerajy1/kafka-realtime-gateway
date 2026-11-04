@@ -146,14 +146,14 @@ async fn main() -> std::io::Result<()> {
 
     tracing::info!(
         target: "Server",
-        "🚀 Kafka realtime gateway running on http://localhost:{port}"
+        "🚀 Kafka realtime gateway running in {} on http://localhost:{port}",
+        env.app_env.as_str()
     );
 
     axum::serve(listener, app::router(state))
         .with_graceful_shutdown(async move {
             shutdown_signal().await;
 
-            // Tells the bridge and every waiting task that the gateway is stopping
             // Tells the bridge, every WebSocket and every waiting task that the gateway is stopping
             let _ = stop_tx.send(true);
 

@@ -175,7 +175,7 @@ Max 5 connections and 120 s idle timeout per pool. The app never selects the `ka
 - `xtask` cargo aliases: `css`, `dev`, `start`, `build-prod`, `hash`, `docker-build`, `docker-up`, `docker-down`, `docker-start`, `docker-stop`, `docker-restart`, `docker-logs`, `docker-logs-clear`, `docker-rmi`, `docker-clean`. `hash` is `cargo hash 'value'`: bcrypt cost 12, prints the hash, replaces `bun run hash`.
 - Dockerfile: two stages, `rust:1-bookworm` builder and `debian:bookworm-slim` runtime with `ca-certificates`. Port, env and compose follow the old gateway, not recordlog. Compose: container `kafka-api-gateway`, image `kafka-api-gateway:latest`, `restart: unless-stopped`, `env_file: ../.env.production`, `8089:8089`, bridge network, `extra_hosts: host.docker.internal:host-gateway`. Drop `NODE_ENV`.
 - CI: `.github/workflows/test.yml` calls `dheerajy1/.github/.github/workflows/test-rust.yml@main`. Keep unchanged: `pr-check-template.yml`, `pr-checks.yml`, `labeler.yml`, `CODEOWNERS`, the PR template.
-- `release.yml` is undecided. See section 9.
+- `release.yml`: semantic-release through `cycjimmy/semantic-release-action` (D46).
 - Write a proper new `README.md` and update `docs/dev-setup.md` and `docs/prod-setup.md` for the Rust version. The old README is stale.
 
 ## 3. Deviations from the old gateway
@@ -226,7 +226,8 @@ Max 5 connections and 120 s idle timeout per pool. The app never selects the `ka
 | D42 | Ten docker xtask commands: `docker-build` (runs `cargo css` first, then `build`), `docker-up` (`up -d`), `docker-down`, `docker-start`, `docker-stop`, `docker-restart`, `docker-logs` (`logs -f`), `docker-logs-clear` (`sudo truncate` of the container `LogPath`, Linux), `docker-rmi`, `docker-clean` (`down`, then `rmi`). | `[DONE]` |
 | D43 | CI: `.github/workflows/test.yml` calls `dheerajy1/.github/.github/workflows/test-rust.yml@main`. That shared workflow was changed to `--workspace --all-targets --locked` for check and clippy, and `--workspace --locked` for test and build, so CI matches the local checks. `cargo test-ws` needs a running gateway and broker, so it stays a manual pre-release check, documented in `docs/dev-setup.md`. | `[DONE]` |
 | D44 | Docs: `README.md` (new), `docs/dev-setup.md`, `docs/prod-setup.md`, and a separate `docs/websocket.md` for the WebSocket protocol (OpenAPI cannot describe it). | `[DONE]` |
-| D45 | `APP_ENV` stays in `.env.example`, `.env.development` and `.env.production`. The gateway does not read it yet. Adding it to the env schema is a later step (section 9). | `[DECIDED]` |
+| D45 | `APP_ENV` is a required env variable with exactly two allowed values, `development` and `production` (`AppEnv` enum in `src/schemas/env.rs`, any other value stops the gateway at boot). For now it is only shown in the startup log line. Switching behavior by environment (for example CORS origins) is a later decision. | `[DONE]` |
+| D46 | Release: `.github/workflows/release.yml` runs on push to `main` with `cycjimmy/semantic-release-action@v6.0.0` and the plugins `@semantic-release/changelog`, `@semantic-release/git` and `@semantic-release-cargo/semantic-release-cargo` (`publish: false`, nothing goes to crates.io). It writes `CHANGELOG.md`, bumps `Cargo.toml` and `Cargo.lock`, commits as `github-actions[bot]`, creates the tag and the GitHub Release. No Bun and no `package.json`. `cargo-smart-release` was rejected: it is built around crates.io (discussion #144), and a fork would be extra upkeep. `release-plz` was also considered: it uses a release PR, not a direct push. | `[DONE]` |
 
 ## 4. Behavior of the old gateway to replicate
 
@@ -396,7 +397,7 @@ Status: finished on 2026-11-03. Clippy is clean and `cargo test --workspace` pas
 - `.github/workflows/test.yml` calls `test-rust.yml@main` (D43).
 - `README.md`, `docs/dev-setup.md`, `docs/prod-setup.md`, `docs/websocket.md` (D44).
 - Final test pass and a Docker run: done.
-- `release.yml`: last, see section 9.
+- `release.yml`: done after Phase 4 (D46).
 
 ## 8. `kafkit-client` 0.1.9
 
@@ -426,13 +427,10 @@ Broker side (done by the user, not by the gateway): to carry messages above 1 MB
 
 ## 9. Deferred and later
 
-1. `release.yml` (semantic-release for Rust). Not decided: the user could not find suitable Rust release YAML and needs to choose crates. Do this last, after Phase 4.
-2. Topic removal from the Kafka subscription without a restart. Not needed for disabling: a reload already stops delivery (D31). Depends on `[VERIFY]` items 1 and 2 in section 8.
-2a. Database scripts applied by the application: `sqlx` migrations (versioned SQL files in `migrations/`, `migrate` and `macros` features), run with a separate login `kag_proj_migrator` that owns the objects and has its own env setting, because `kag_proj_service` only has data and EXECUTE rights. The same step adds a trigger on `kafka_topic` with `LISTEN/NOTIFY` so the gateway reloads by itself, switchable by a config setting. The user also wants the migrator to have the smallest rights possible. Postgres owners always keep read rights on their own tables, so the protection is the separate login.
-3. Sign the portal cookie (for example a JWT in the cookie) so it cannot be forged. The user wants plain `ok` for now.
-4. There is no portal logout in the old gateway. None planned.
-5. Add `APP_ENV` to the env schema and use it in the app to tell development from production (D45).
-6. Small cleanups: remove the unused `CLOSE_INTERNAL_ERROR` (1011) constant in `src/ws/mod.rs`, and the duplicate comment line above `stop_tx.send(true)` in `src/main.rs`.
+1. Topic removal from the Kafka subscription without a restart. Not needed for disabling: a reload already stops delivery (D31). Depends on `[VERIFY]` items 1 and 2 in section 8.
+1a. Database scripts applied by the application: `sqlx` migrations (versioned SQL files in `migrations/`, `migrate` and `macros` features), run with a separate login `kag_proj_migrator` that owns the objects and has its own env setting, because `kag_proj_service` only has data and EXECUTE rights. The same step adds a trigger on `kafka_topic` with `LISTEN/NOTIFY` so the gateway reloads by itself, switchable by a config setting. The user also wants the migrator to have the smallest rights possible. Postgres owners always keep read rights on their own tables, so the protection is the separate login.
+2. Sign the portal cookie (for example a JWT in the cookie) so it cannot be forged. The user wants plain `ok` for now.
+3. There is no portal logout in the old gateway. None planned.
 
 ## 10. Open items and risks
 
@@ -449,5 +447,5 @@ Broker side (done by the user, not by the gateway): to carry messages above 1 MB
 2. Phase 2 database and auth.
 3. Phase 3 Kafka, starting with the `[VERIFY]` spike.
 4. Phase 4 delivery.
-5. `release.yml`.
+5. `release.yml` (done, D46).`
 6. Later items (section 9), each as its own phase.

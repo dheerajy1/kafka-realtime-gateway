@@ -31,7 +31,7 @@ Every variable below is required. A missing or invalid value stops the gateway a
 | Variable | Rule | Meaning |
 | --- | --- | --- |
 | `APP_PORT` | positive integer | Port the gateway listens on (all interfaces). |
-| `APP_ENV` | free text | `development` or `production`. Present in the env files, not read by the gateway yet. |
+| `APP_ENV` | `development` or `production` | Runtime environment. Any other value stops the gateway at boot. It is shown in the startup log line. |
 | `APP_NAME` | 1 to 50 chars | Application name. |
 | `JWT_SECRET` | 1 to 50 chars | Secret used to sign JWTs. |
 | `CLIENT_ID`, `CLIENT_SECRET` | 1 to 50 chars each | Client credentials checked by the server gate. |
@@ -87,16 +87,38 @@ The OpenAPI reference is at `/openapi` (Scalar UI) and `/openapi/json`. It descr
 
 Run these before every commit, in this order. CI runs the same checks.
 
+### 6.1 format and check
+
 ```bash
 cargo fmt && cargo check --workspace --all-targets
 ```
+- reduce noise
+
+```bash
+cargo fmt && cargo check --workspace --all-targets 2>&1 | grep -Ev '^( *Compiling| *Checking [^ ]+ v[^ ]+$)'
+```
+
+### 6.2 clippy
 
 ```bash
 cargo clippy --workspace --all-targets --locked -- -D warnings
 ```
 
+### 6.5 Testing 
+
 ```bash
 cargo test --workspace
+```
+- reduce noise
+
+```bash
+cargo test --workspace 2>&1 | grep -P '^(?!.*SIGTERM).*(Finished|Running|test result|FAILED|panicked|error|Doc-tests)'
+```
+
+### 6.4 Combined
+
+```bash
+cargo fmt && cargo check --workspace --all-targets 2>&1 | grep -Ev '^( *Compiling| *Checking [^ ]+ v[^ ]+$)' && cargo clippy --workspace --all-targets --locked -- -D warnings && cargo test --workspace 2>&1 | grep -P '^(?!.*SIGTERM).*(Finished|Running|test result|FAILED|panicked|error|Doc-tests)'
 ```
 
 The automated tests use in-memory fakes. They need no database and no broker. Tests live in the `tests/` folder.

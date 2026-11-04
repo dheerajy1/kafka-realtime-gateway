@@ -21,9 +21,6 @@ pub const CLOSE_AUTH_FAILED: u16 = 4001;
 // Close code for a gateway that is shutting down
 pub const CLOSE_GOING_AWAY: u16 = 1001;
 
-// Close code for an unexpected failure inside the gateway
-pub const CLOSE_INTERNAL_ERROR: u16 = 1011;
-
 // Close code for a subscriber that is too slow, it may reconnect
 pub const CLOSE_TRY_AGAIN_LATER: u16 = 1013;
 

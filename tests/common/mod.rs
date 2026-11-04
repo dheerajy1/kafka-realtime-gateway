@@ -34,6 +34,7 @@ pub fn setup_env() {
     INIT.call_once(|| {
         // Runs before any router is built, so no other thread reads the env yet
         unsafe {
+            std::env::set_var("APP_ENV", "development");
             std::env::set_var("APP_PORT", "5000");
             std::env::set_var("JWT_SECRET", "test-jwt-secret");
             std::env::set_var("CLIENT_ID", TEST_CLIENT_ID);

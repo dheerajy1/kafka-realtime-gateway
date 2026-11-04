@@ -10,7 +10,7 @@
       }
     ],
     [
-      "semantic-release-cargo",
+      "@semantic-release-cargo/semantic-release-cargo",
       {
         "publish": false,
         "checkRegistryToken": false

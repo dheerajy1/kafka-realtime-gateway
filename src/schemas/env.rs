@@ -6,8 +6,29 @@ fn default_db_port() -> u16 {
     5432
 }
 
+// Runtime environment the gateway runs in, only these two values are accepted
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum AppEnv {
+    Development,
+    Production,
+}
+
+impl AppEnv {
+    // Returns the value as written in APP_ENV
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AppEnv::Development => "development",
+            AppEnv::Production => "production",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Validate)]
 pub struct EnvSchema {
+    // Runtime environment, development or production
+    pub app_env: AppEnv,
+
     // Port the server listens on
     #[validate(range(min = 1, message = "APP_PORT must be a valid port number"))]
     pub app_port: u16,
