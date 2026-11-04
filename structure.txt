@@ -45,6 +45,7 @@
 │   │   ├── healthz.rs
 │   │   ├── healthz_app.rs
 │   │   ├── healthz_db.rs
+│   │   ├── healthz_kafka.rs
 │   │   ├── home.rs
 │   │   ├── icons.rs
 │   │   ├── layout.rs
@@ -105,10 +106,13 @@
 │   │           ├── model.rs
 │   │           └── session.rs
 │   ├── kafka/
+│   │   ├── activity.rs
 │   │   ├── admin.rs
 │   │   ├── bridge.rs
 │   │   ├── consumer.rs
 │   │   ├── error.rs
+│   │   ├── health.rs
+│   │   ├── health_probe.rs
 │   │   ├── inbound.rs
 │   │   ├── mod.rs
 │   │   ├── producer.rs
@@ -176,4 +180,4 @@
         ├── main.rs
         └── ws_test.rs
 
-31 directories, 144 files
+31 directories, 148 files
