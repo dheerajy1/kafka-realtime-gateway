@@ -1,6 +1,7 @@
 ~/dev/vs-code/kafka-api-gateway-rust
 
 ./
+├── .dockerignore
 ├── .env.development
 ├── .env.example
 ├── .env.production
@@ -24,7 +25,10 @@
 │   ├── Dockerfile
 │   └── docker-compose.yml
 ├── docs/
-│   └── build.md
+│   ├── build.md
+│   ├── dev-setup.md
+│   ├── prod-setup.md
+│   └── websocket.md
 ├── public/
 │   ├── favicon.ico*
 │   ├── global.css
@@ -80,7 +84,39 @@
 │   │       │   ├── mod.rs
 │   │       │   ├── model.rs
 │   │       │   └── service.rs
-│   │       └── mod.rs
+│   │       ├── http_publish/
+│   │       │   ├── handler.rs
+│   │       │   ├── mod.rs
+│   │       │   ├── model.rs
+│   │       │   └── service.rs
+│   │       ├── mod.rs
+│   │       ├── topics/
+│   │       │   ├── handler.rs
+│   │       │   ├── mod.rs
+│   │       │   └── model.rs
+│   │       ├── ws_publish/
+│   │       │   ├── handler.rs
+│   │       │   ├── mod.rs
+│   │       │   ├── model.rs
+│   │       │   └── session.rs
+│   │       └── ws_subscribe/
+│   │           ├── handler.rs
+│   │           ├── mod.rs
+│   │           ├── model.rs
+│   │           └── session.rs
+│   ├── kafka/
+│   │   ├── admin.rs
+│   │   ├── bridge.rs
+│   │   ├── consumer.rs
+│   │   ├── error.rs
+│   │   ├── inbound.rs
+│   │   ├── mod.rs
+│   │   ├── producer.rs
+│   │   ├── publisher.rs
+│   │   ├── registry.rs
+│   │   ├── reloader.rs
+│   │   ├── subscribers.rs
+│   │   └── sync.rs
 │   ├── lib.rs
 │   ├── logging.rs
 │   ├── main.rs
@@ -108,10 +144,14 @@
 │   │   ├── mod.rs
 │   │   └── response.rs
 │   ├── state.rs
-│   └── tailwind.css
+│   ├── tailwind.css
+│   └── ws/
+│       ├── keepalive.rs
+│       └── mod.rs
 ├── structure.txt
 ├── tests/
 │   ├── api_auth.rs
+│   ├── bridge.rs
 │   ├── common/
 │   │   ├── fakes.rs
 │   │   └── mod.rs
@@ -119,11 +159,21 @@
 │   ├── errors.rs
 │   ├── gate.rs
 │   ├── health.rs
+│   ├── http_publish.rs
+│   ├── inbound.rs
+│   ├── kafka_error.rs
 │   ├── pages.rs
-│   └── portal_login.rs
+│   ├── portal_login.rs
+│   ├── subscribers.rs
+│   ├── topic_registry.rs
+│   ├── topic_sync.rs
+│   ├── topics_reload.rs
+│   ├── ws_publish.rs
+│   └── ws_subscribe.rs
 └── xtask/
     ├── Cargo.toml
     └── src/
-        └── main.rs
+        ├── main.rs
+        └── ws_test.rs
 
-25 directories, 100 files
+31 directories, 144 files

@@ -1,0 +1,16 @@
+# Build output
+target
+
+# Version control and CI
+.git
+.github
+
+# Secrets and local env files, compose passes env at runtime
+.env
+.env.*
+
+# Docs and misc files not needed to build the binary
+docs
+examples
+CHANGELOG.md
+structure.txt

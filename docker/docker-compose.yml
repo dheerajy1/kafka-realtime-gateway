@@ -10,11 +10,11 @@ services:
 
     restart: unless-stopped
 
+    # The gateway forces exit at 8 s, this leaves headroom for the WebSocket close frames
+    stop_grace_period: 15s
+
     env_file:
       - ../.env.production
-
-    environment:
-      NODE_ENV: production
 
     ports:
       - "8089:8089"

@@ -5,9 +5,14 @@ use kafka_api_gateway::config::env::Env;
 
 mod ws_test;
 
+// Compose file, image and container names used by the docker tasks
+const COMPOSE_FILE: &str = "docker/docker-compose.yml";
+const IMAGE: &str = "kafka-api-gateway:latest";
+const CONTAINER: &str = "kafka-api-gateway";
+
 fn main() {
     let task = env::args().nth(1).unwrap_or_else(|| {
-        eprintln!("Usage: cargo <css|dev|start|build-prod|hash|test-ws>");
+        eprintln!("Usage: cargo <css|dev|start|build-prod|hash|test-ws|docker-build|docker-up|docker-down|docker-start|docker-stop|docker-restart|docker-logs|docker-logs-clear|docker-rmi|docker-clean>");
         exit(1);
     });
 
@@ -18,6 +23,23 @@ fn main() {
         "build" => run_build(),
         "hash" => run_hash(env::args().nth(2)),
         "test-ws" => run_test_ws(env::args().nth(2), env::args().nth(3), env::args().nth(4)),
+        "docker-build" => {
+            run_css();
+            finish(compose(&["build"]))
+        }
+        "docker-up" => finish(compose(&["up", "-d"])),
+        "docker-down" => finish(compose(&["down"])),
+        "docker-start" => finish(compose(&["start"])),
+        "docker-stop" => finish(compose(&["stop"])),
+        "docker-restart" => finish(compose(&["restart"])),
+        "docker-logs" => finish(compose(&["logs", "-f"])),
+        "docker-logs-clear" => run_docker_logs_clear(),
+        "docker-rmi" => finish(docker(&["rmi", IMAGE])),
+        "docker-clean" => {
+            let down = compose(&["down"]);
+            let rmi = docker(&["rmi", IMAGE]);
+            finish(down && rmi)
+        }
         _ => {
             eprintln!("Unknown task: {task}");
             exit(1);
@@ -142,4 +164,48 @@ fn run_test_ws(api_key: Option<String>, api_secret: Option<String>, mode: Option
     }
 
     exit(if ws_test::run(&args) { 0 } else { 1 });
+}
+
+// Exits with 0 when the command succeeded and 1 otherwise
+fn finish(ok: bool) -> ! {
+    exit(if ok { 0 } else { 1 })
+}
+
+// Runs a docker command and returns whether it succeeded
+fn docker(args: &[&str]) -> bool {
+    Command::new("docker")
+        .args(args)
+        .status()
+        .expect("Failed to execute docker, is it installed and on PATH?")
+        .success()
+}
+
+// Runs docker compose against the compose file and returns whether it succeeded
+fn compose(args: &[&str]) -> bool {
+    let mut full = vec!["compose", "-f", COMPOSE_FILE];
+    full.extend_from_slice(args);
+
+    docker(&full)
+}
+
+// Empties the container log file, which usually needs sudo on Linux
+fn run_docker_logs_clear() -> ! {
+    let output = Command::new("docker")
+        .args(["inspect", "--format", "{{.LogPath}}", CONTAINER])
+        .output()
+        .expect("Failed to execute docker inspect");
+
+    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    if !output.status.success() || path.is_empty() {
+        eprintln!("Could not find the log file of the container {CONTAINER}, is it created?");
+        exit(1);
+    }
+
+    let status = Command::new("sudo")
+        .args(["truncate", "-s", "0", &path])
+        .status()
+        .expect("Failed to execute sudo truncate");
+
+    finish(status.success())
 }

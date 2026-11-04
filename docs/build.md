@@ -220,6 +220,13 @@ Max 5 connections and 120 s idle timeout per pool. The app never selects the `ka
 | D36 | Graceful shutdown limit is 8 s from the signal, under Docker's default 10 s stop timeout. Open WebSockets get close code 1001, pending ACK waits fail without a commit, the gateway waits for the WebSocket tasks, then closes consumer, producer and DB pools. After 8 s the process logs an error and exits with code 1. | `[DECIDED]` |
 | D37 | `cargo dev` replaces the `xtask` process with the gateway (Unix), so Ctrl+C reaches only the gateway and the prompt returns after the shutdown. | `[DECIDED]` |
 | D38 | `cargo test-ws 'api-key' 'api-secret' [hold]` runs a 40 step WebSocket scenario against a running gateway and broker. It needs the topics `gateway-test` (consume, no ACK, subscriber publish allowed) and `gateway-test-ack` (consume, ACK required, subscriber publish allowed) in Kafka and in `kafka_topic`. The `hold` mode checks the 1001 close. `xtask` depends on `tungstenite` and `serde_json`. | `[DECIDED]` |
+| D39 | Docker image `kafka-api-gateway:latest`: two stages, `rust:1-bookworm` builder (`cargo build --release --locked --package kafka-api-gateway`) and `debian:bookworm-slim` runtime with `ca-certificates`, binary `main`, port 8089. No Tailwind in the image: the committed `public/global.css` is embedded in the binary. `.dockerignore` excludes `target`, `.git`, `.github`, `.env*`, `docs`, `examples`, `CHANGELOG.md`, `structure.txt`. The image is 176 MB, the old TypeScript one was 1.01 GB. | `[DONE]` |
+| D40 | The broker keeps two listeners. Port 9092 advertises `localhost:9092` (gateway on the host, `.env.development`). Port 9094 advertises `host.docker.internal:9094` (gateway in Docker, `.env.production`). One port cannot advertise both addresses, so a single port was not chosen. | `[DECIDED]` |
+| D41 | Compose: container `kafka-api-gateway`, `restart: unless-stopped`, `stop_grace_period: 15s` (D36 forces exit at 8 s, Docker's default is 10 s), `env_file: ../.env.production`, `8089:8089`, `network_mode: bridge`, `extra_hosts: host.docker.internal:host-gateway`, no `NODE_ENV`. | `[DONE]` |
+| D42 | Ten docker xtask commands: `docker-build` (runs `cargo css` first, then `build`), `docker-up` (`up -d`), `docker-down`, `docker-start`, `docker-stop`, `docker-restart`, `docker-logs` (`logs -f`), `docker-logs-clear` (`sudo truncate` of the container `LogPath`, Linux), `docker-rmi`, `docker-clean` (`down`, then `rmi`). | `[DONE]` |
+| D43 | CI: `.github/workflows/test.yml` calls `dheerajy1/.github/.github/workflows/test-rust.yml@main`. That shared workflow was changed to `--workspace --all-targets --locked` for check and clippy, and `--workspace --locked` for test and build, so CI matches the local checks. `cargo test-ws` needs a running gateway and broker, so it stays a manual pre-release check, documented in `docs/dev-setup.md`. | `[DONE]` |
+| D44 | Docs: `README.md` (new), `docs/dev-setup.md`, `docs/prod-setup.md`, and a separate `docs/websocket.md` for the WebSocket protocol (OpenAPI cannot describe it). | `[DONE]` |
+| D45 | `APP_ENV` stays in `.env.example`, `.env.development` and `.env.production`. The gateway does not read it yet. Adding it to the env schema is a later step (section 9). | `[DECIDED]` |
 
 ## 4. Behavior of the old gateway to replicate
 
@@ -294,39 +301,47 @@ Hard time limit: 8 s from the signal `[DECIDED]` (D36). A watchdog logs an error
 ## 5. Target layout
 
 ```
-Cargo.toml                 workspace: root + xtask
-.cargo/config.toml         aliases (section 2.12)
-xtask/                     css, dev, start, build, hash, docker *
+Cargo.toml                 workspace: root crate kafka-api-gateway (bin main) + xtask
+.cargo/config.toml         aliases: css, dev, start, build-prod, hash, test-ws (docker * in Phase 4)
+xtask/src/                 main.rs (css, dev, start, build, hash, test-ws), ws_test.rs (live WebSocket scenario)
 docker/                    Dockerfile, docker-compose.yml
-docs/                      build.md, dev-setup.md, prod-setup.md
+docs/                      build.md, dev-setup.md, prod-setup.md, websocket.md
 public/                    global.css, logo.png, favicon.ico (embedded at compile time)
 src/
-  main.rs                  plain tokio + axum::serve, graceful shutdown
+  main.rs                  boot, graceful shutdown, 8 s watchdog
   lib.rs, app.rs           router(state), layers, CORS, limits, gate
-  config/                  env schema, fail-fast load
-  schemas/                 response envelope, auth, env, ws messages
-  errors/                  code, catalog, ApiError, fallbacks, panic catch
-  db/                      pools, error mapping, portal_users, api_users, api_keys, topics
-  kafka/                   producer, consumer, topic registry, bridge, pending ACKs, subscriber registry
-  middleware/              no_auth, auth (JWT), api_key, server_gate
-  features/v1/             health, auth (login, jwt), api_keys, http_publish, ws_publish, ws_subscribe
+  state.rs                 AppState (traits for DB and Kafka, KafkaDeps, shutdown watch, ws_drain)
+  logging.rs               tracing setup, IST log lines
+  config/                  env load, fail-fast
+  schemas/                 env, response envelope, auth
+  errors/                  code, catalog, ApiError, fallback, panic catch
+  db/                      error, pool, store (traits), postgres (PgStore)
+  auth/                    jwt, password
+  kafka/                   error, publisher, producer, registry, admin, sync, reloader,
+                           inbound, subscribers, bridge, consumer
+  ws/                      mod (close codes), keepalive (30 s ping)
+  middleware/              no_auth, auth, api_key, server_gate, valid_json, cors
+  features/v1/             health, auth, api_keys, http_publish, topics (reload),
+                           ws_subscribe, ws_publish (each: model, handler, mod, service or session)
   pages/, components/      Dioxus pages and components, icons
-  openapi/                 ApiDoc, ErrorExamples, Scalar router
+  openapi/                 ApiDoc, error examples, Scalar router
   tailwind.css
-tests/                     common/mod.rs plus one file per area
+tests/                     common/{mod,fakes}.rs plus one file per area
 ```
 
-The reference router has no shared state. The gateway needs one `AppState` (pools, producer, topic registry, subscriber registry, pending ACKs, shutdown flag). Anything that touches the DB or Kafka sits behind a small trait (for example a topic source, a key store, a publisher), so `cargo test` runs against in-memory fakes and needs no database and no broker `[DECIDED]` (done in Phase 2 with `async-trait`, see D27).
+One `AppState` holds the users, api_keys, db_probe, topics, publisher, reloader and subscribers handles, the shutdown watch and the ws_drain sender. Anything that touches the DB or Kafka sits behind a small trait, so `cargo test` runs against in-memory fakes (`KafkaFakes`, `state_with_kafka` in `tests/common`) and needs no database and no broker `[DECIDED]` (D27).
 
 ## 6. Dependencies
 
-Keep from the reference: `axum` 0.8, `tokio` (full), `tower` 0.5, `dioxus` 0.7 and `dioxus-ssr` 0.7 (same features), `dotenvy`, `envy`, `serde`, `validator` 0.21, `chrono` (clock), `bcrypt` 0.19, `jsonwebtoken` 11 (`rust_crypto`), `uuid` (v7), `utoipa` 6, `utoipa-scalar` 0.4 (axum). Dev: `http-body-util`, `serde_json`, `tower` (util).
+Root crate: `axum` 0.8 (feature `ws`), `tokio` (full), `tower` 0.5, `tower-http` 0.6 (`catch-panic`, `cors`), `dioxus` 0.7 and `dioxus-ssr` 0.7, `dotenvy`, `envy`, `serde`, `serde_json`, `validator` 0.21, `chrono` (clock), `bcrypt` 0.19, `jsonwebtoken` 11 (`rust_crypto`), `uuid` (v7), `utoipa` 6, `utoipa-scalar` 0.4 (axum), `tracing`, `tracing-subscriber` (env-filter), `sqlx` 0.9 (`default-features = false`, `runtime-tokio`, `postgres`), `async-trait`, `getrandom`, `kafkit-client` 0.1.9.
 
-Add: `axum` feature `ws`; `tower-http` features `catch-panic` and `cors`; `sqlx` 0.9 (`default-features = false`, `runtime-tokio`, `postgres`); `async-trait`; `getrandom`; `kafkit-client` 0.1.9; `tracing` and `tracing-subscriber`.
+Dev: `tower` (util), `http-body-util`.
 
-Remove from the reference: `vercel_runtime`, `reqwest`, `tiberius`, `bb8`, `bb8-tiberius`.
+`xtask`: `kafka-api-gateway` (path), `dotenvy`, `bcrypt`, `tungstenite` 0.29, `serde_json`.
 
-`[VERIFY]` Before adding each crate, confirm its latest version on crates.io: the versions of `sqlx`, `tracing`, `tracing-subscriber` and `tower-http` were not read from the reference. `kafkit-client` 0.1.9 was the latest on crates.io on 2026-10-30.
+Removed from the reference: `vercel_runtime`, `reqwest`, `tiberius`, `bb8`, `bb8-tiberius`.
+
+Deferred crates: `sqlx` features `migrate` and `macros` (section 9, item 2a).
 
 ## 7. Phases
 
@@ -373,12 +388,14 @@ Goal: publish, consume and the WebSocket endpoints.
 - Tests with fakes: owner selection, ACK success, ACK timeout and owner disconnect redelivery, bad message skipped, non-ACK drop, topic check 403, invalid API key rejected on open.
 - Done when: the tests pass and a manual publish-consume-ACK round trip works against the real broker.
 
-### Phase 4: Delivery
+### Phase 4: Delivery `[DONE]`
 
-- `docker/Dockerfile` and `docker/docker-compose.yml` per 2.12, plus the docker xtask commands.
-- `.github/workflows/test.yml` pointing to `test-rust.yml@main`.
-- `README.md`, `docs/dev-setup.md`, `docs/prod-setup.md`. Document the WebSocket protocol (OpenAPI cannot describe it).
-- Final test pass and a Docker run.
+Status: finished on 2026-11-03. Clippy is clean and `cargo test --workspace` passes 187 tests. `cargo docker-build` built the image (176 MB), `cargo docker-up` started the container, and it connected to PostgreSQL and the broker through `host.docker.internal` and loaded the topics. `cargo docker-stop` stopped it in 0.4 s. Decisions D39 to D45 came out of this phase.
+
+- `docker/Dockerfile`, `docker/docker-compose.yml`, `.dockerignore` and the docker xtask commands (D39 to D42).
+- `.github/workflows/test.yml` calls `test-rust.yml@main` (D43).
+- `README.md`, `docs/dev-setup.md`, `docs/prod-setup.md`, `docs/websocket.md` (D44).
+- Final test pass and a Docker run: done.
 - `release.yml`: last, see section 9.
 
 ## 8. `kafkit-client` 0.1.9
@@ -396,7 +413,7 @@ Differences from the old client that must be handled:
 - Producer `max_request_size` defaults to 1 MiB. Raise it for the 10 MB limit.
 - `fetch_max_bytes` defaults to 50 MiB, which is enough. `partition_max_bytes` defaults to 1 MiB and is set to 11 MiB in the consumer. `[DONE]` A 9 MB message was consumed through the bridge on 2026-11-03.
 
-Spike results (2026-11-01, run against the local apache/kafka:4.1.0 broker with `examples/kafka_spike.rs`):
+Spike results (2026-11-01, run against the local apache/kafka:4.1.0 broker with a throwaway spike (removed in Phase 4, see commit b243e5d)):
 1. `[DONE]` `subscribe` replaces the subscription. The full topic list is passed each time.
 2. `[DONE]` `subscribe` with a smaller list drops the removed topic cleanly. The later topic-removal feature is possible.
 3. `[DONE]` `KafkaAdmin::list_topics()` for the startup check. `KafkaConsumer::list_topics()` also exists.
@@ -414,6 +431,8 @@ Broker side (done by the user, not by the gateway): to carry messages above 1 MB
 2a. Database scripts applied by the application: `sqlx` migrations (versioned SQL files in `migrations/`, `migrate` and `macros` features), run with a separate login `kag_proj_migrator` that owns the objects and has its own env setting, because `kag_proj_service` only has data and EXECUTE rights. The same step adds a trigger on `kafka_topic` with `LISTEN/NOTIFY` so the gateway reloads by itself, switchable by a config setting. The user also wants the migrator to have the smallest rights possible. Postgres owners always keep read rights on their own tables, so the protection is the separate login.
 3. Sign the portal cookie (for example a JWT in the cookie) so it cannot be forged. The user wants plain `ok` for now.
 4. There is no portal logout in the old gateway. None planned.
+5. Add `APP_ENV` to the env schema and use it in the app to tell development from production (D45).
+6. Small cleanups: remove the unused `CLOSE_INTERNAL_ERROR` (1011) constant in `src/ws/mod.rs`, and the duplicate comment line above `stop_tx.send(true)` in `src/main.rs`.
 
 ## 10. Open items and risks
 
