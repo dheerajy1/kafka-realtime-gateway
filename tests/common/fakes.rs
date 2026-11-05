@@ -1,8 +1,19 @@
-use std::{collections::HashMap, sync::Mutex};
+use std::{
+    collections::HashMap,
+    sync::{
+        Mutex,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    },
+};
 
 use async_trait::async_trait;
 use kafka_api_gateway::kafka::{
+    activity::{ConsumerSnapshot, ProducerSnapshot},
     admin::TopicLister,
+    health::{
+        BrokerDisk, BrokerInfo, ClusterInfo, GatewayKafkaState, GroupHealth, KafkaHealthFull,
+        KafkaHealthSummary, KafkaProbe, KafkaStatus, LogDirInfo, TopicHealth,
+    },
     publisher::{PublishReceipt, PublishRecord, Publisher},
     reloader::{ReloadSummary, TopicReload},
 };
@@ -341,6 +352,132 @@ impl TopicReload for FakeReloader {
         match &self.result {
             Ok(summary) => Ok(summary.clone()),
             Err(entry) => Err(ApiError::from_entry(*entry)),
+        }
+    }
+}
+
+// Stand-in for the Kafka probe, the test switches the broker up or down and counts the full checks
+pub struct FakeKafkaProbe {
+    // Whether the fake broker answers
+    up: AtomicBool,
+
+    // How many times the full check ran
+    full_calls: AtomicUsize,
+}
+
+impl FakeKafkaProbe {
+    // A probe whose broker is up
+    pub fn new() -> Self {
+        Self {
+            up: AtomicBool::new(true),
+            full_calls: AtomicUsize::new(0),
+        }
+    }
+
+    // Switches the fake broker up or down
+    pub fn set_up(&self, up: bool) {
+        self.up.store(up, Ordering::Relaxed);
+    }
+
+    // How many full checks ran so far
+    pub fn full_calls(&self) -> usize {
+        self.full_calls.load(Ordering::Relaxed)
+    }
+
+    // The gateway state every full result carries
+    fn gateway() -> GatewayKafkaState {
+        GatewayKafkaState {
+            producer: ProducerSnapshot {
+                last_publish_ago_ms: None,
+                last_publish_ok: None,
+            },
+            consumer: ConsumerSnapshot {
+                running: true,
+                stalled: false,
+                last_poll_ago_ms: Some(10),
+                last_error: None,
+            },
+            consumed_topics: 2,
+            connected_subscribers: 0,
+        }
+    }
+}
+
+#[async_trait]
+impl KafkaProbe for FakeKafkaProbe {
+    async fn summary(&self) -> KafkaHealthSummary {
+        if self.up.load(Ordering::Relaxed) {
+            KafkaHealthSummary {
+                status: KafkaStatus::Up,
+                broker_count: Some(1),
+                latency_ms: Some(2),
+            }
+        } else {
+            KafkaHealthSummary {
+                status: KafkaStatus::Down,
+                broker_count: None,
+                latency_ms: None,
+            }
+        }
+    }
+
+    async fn full(&self) -> KafkaHealthFull {
+        self.full_calls.fetch_add(1, Ordering::Relaxed);
+
+        if !self.up.load(Ordering::Relaxed) {
+            return KafkaHealthFull {
+                status: KafkaStatus::Down,
+                latency_ms: None,
+                checked_at: "2026-01-01T00:00:00.000Z".to_string(),
+                error: Some("connection refused".to_string()),
+                cluster: None,
+                gateway: Self::gateway(),
+                topics: None,
+                consumer_group: None,
+                disks: None,
+                warnings: Vec::new(),
+            };
+        }
+
+        KafkaHealthFull {
+            status: KafkaStatus::Up,
+            latency_ms: Some(2),
+            checked_at: "2026-01-01T00:00:00.000Z".to_string(),
+            error: None,
+            cluster: Some(ClusterInfo {
+                cluster_id: "test-cluster".to_string(),
+                controller_id: 1,
+                brokers: vec![BrokerInfo {
+                    id: 1,
+                    host: "kafka".to_string(),
+                    port: 9092,
+                    rack: None,
+                    fenced: false,
+                }],
+            }),
+            gateway: Self::gateway(),
+            topics: Some(vec![TopicHealth {
+                name: "gateway-test".to_string(),
+                partitions: 1,
+                under_replicated_partitions: 0,
+                leaderless_partitions: 0,
+            }]),
+            consumer_group: Some(GroupHealth {
+                group_id: "test-group-id".to_string(),
+                state: "Stable".to_string(),
+                members: 1,
+            }),
+            disks: Some(vec![BrokerDisk {
+                broker_id: 1,
+                log_dirs: vec![LogDirInfo {
+                    path: "/var/lib/kafka/data".to_string(),
+                    total_bytes: Some(1000),
+                    usable_bytes: Some(400),
+                    replica_bytes: 50,
+                    failed: false,
+                }],
+            }]),
+            warnings: Vec::new(),
         }
     }
 }

@@ -1,6 +1,8 @@
 use serde::Serialize;
 use utoipa::ToSchema;
 
+use crate::kafka::health::KafkaHealthSummary;
+
 // Application health data returned by GET /api/v1/health/app
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -43,4 +45,5 @@ pub struct DbHealthData {
 pub struct HealthData {
     pub app: AppHealthData,
     pub db: DbHealthData,
+    pub kafka: KafkaHealthSummary,
 }

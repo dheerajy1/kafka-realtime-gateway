@@ -1,6 +1,6 @@
 # kafka-realtime-gateway
 
-An HTTP and WebSocket gateway in front of Apache Kafka, written in Rust (axum). Clients publish to and subscribe to Kafka topics through authenticated HTTP and WebSocket endpoints. Users, API keys and the topic registry live in PostgreSQL.
+An HTTP and WebSocket gateway in front of Apache Kafka, written in Rust (axum). Clients publish to and subscribe to Kafka topics through authenticated HTTP and WebSocket endpoints. Users, API keys and the topic registry live in PostgreSQL. Health checks cover the app, the database and the Kafka broker, in a small form for monitors and a full form for a dashboard.
 
 ## Stack
 

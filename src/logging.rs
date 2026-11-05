@@ -50,9 +50,11 @@ where
     }
 }
 
-// Installs the global logger, RUST_LOG can change the level, the default is info
+// Installs the global logger, RUST_LOG can change the level
+// The default is info, but the Kafka client library only logs errors: it repeats a warning many times a second while the broker is down
 pub fn init() {
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info,kafkit_client=error"));
 
     tracing_subscriber::fmt()
         .with_env_filter(filter)

@@ -228,6 +228,16 @@ Max 5 connections and 120 s idle timeout per pool. The app never selects the `ka
 | D44 | Docs: `README.md` (new), `docs/dev-setup.md`, `docs/prod-setup.md`, and a separate `docs/websocket.md` for the WebSocket protocol (OpenAPI cannot describe it). | `[DONE]` |
 | D45 | `APP_ENV` is a required env variable with exactly two allowed values, `development` and `production` (`AppEnv` enum in `src/schemas/env.rs`, any other value stops the gateway at boot). For now it is only shown in the startup log line. Switching behavior by environment (for example CORS origins) is a later decision. | `[DONE]` |
 | D46 | Release: `.github/workflows/release.yml` runs on push to `main` with `cycjimmy/semantic-release-action@v6.0.0` and the plugins `@semantic-release/changelog`, `@semantic-release/git` and `@semantic-release-cargo/semantic-release-cargo` (`publish: false`, nothing goes to crates.io). It writes `CHANGELOG.md`, bumps `Cargo.toml` and `Cargo.lock`, commits as `github-actions[bot]`, creates the tag and the GitHub Release. No Bun and no `package.json`. `cargo-smart-release` was rejected: it is built around crates.io (discussion #144), and a fork would be extra upkeep. `release-plz` was also considered: it uses a release PR, not a direct push. | `[DONE]` |
+| D47 | Kafka health follows the DB health pattern: a `KafkaProbe` trait in `AppState` next to `db_probe`, a fake in `tests/common`, and a real implementation on `KafkaAdmin` from kafkit-client. The DB and Kafka probes of the unified check run concurrently. | `[DECIDED]` |
+| D48 | The unified `GET /api/v1/health` and the portal `/healthz` gain a small `kafka` block: `status`, `brokerCount`, `latencyMs` (the round trip of `describe_cluster`). It is always live, never cached. Kafka `DOWN` fails the API unified check with 503 `KAFKA_PROBE_FAILED` (new catalog entry). The portal `/healthz*` pages keep returning 200 with the status in the body. | `[DECIDED]` |
+| D49 | A dedicated endpoint `GET /api/v1/health/kafka` (client headers, 503 `KAFKA_PROBE_FAILED` when down) and a portal page `/healthz/kafka` (HTML or JSON by `Accept`, always 200), each with its own component. | `[DECIDED]` |
+| D50 | The dedicated result is the full level: `status`, `latencyMs`, `checkedAt`, the cluster (`clusterId`, `controllerId`, brokers with `id`, `host`, `port`), the gateway state (producer and consumer activity, consumed topics, connected WebSocket subscribers), a summary per topic of the registry (partition count, under-replicated and leaderless partitions), the consumer group (state, member count) and broker disk usage (log dir size per broker). The shape is meant to feed a future separate frontend. | `[DECIDED]` |
+| D51 | The dedicated result is cached for 5 seconds and carries `checkedAt`, so a polling UI does not load the broker. | `[DECIDED]` |
+| D52 | Every broker call of a probe has a 3 second timeout. A call that times out counts as `DOWN`, so the health endpoints always answer. | `[DECIDED]` |
+| D53 | The producer and consumer state in the full Kafka health result is activity-based. Consumer: `running`, seconds since the last successful poll, last error. Producer: seconds since the last publish and whether the last publish succeeded. Both are small shared counters (atomics and a mutex for the error text) written by the existing producer and consumer code. | `[DECIDED]` |
+| D54 | Consumer reconnect (found by the live test on 2026-11-04): the kafkit consumer runtime treats "Broken pipe" as non-retriable and never reconnects, so after a broker restart the consumer stayed dead while the health said UP. After 3 failed polls in a row (`RECONNECT_AFTER_FAILURES`, about 9 s with the 3 s retry delay) the loop builds a new `KafkaConsumer` from the stored config, subscribes it to the same topics, clears the paused set and closes the old one in the background (3 s limit). Committed offsets stay in Kafka and unconfirmed messages are delivered again. A failed reconnect is retried every 3 s. The log lines are `CONSUMER_RECONNECTED` and `CONSUMER_RECONNECT_FAILED`, each error text is logged once. Verified live with `docker restart kafka`. | `[DONE]` |
+| D55 | The full Kafka health shows `consumer.stalled`: true while the consumer loop runs and its last good round is older than 30 s. The status stays UP, because the broker itself is fine. | `[DONE]` |
+| D56 | The default log filter is `info,kafkit_client=error`, because the Kafka client library repeats a warning many times a second while the broker is down. `RUST_LOG` still overrides it. | `[DONE]` |
 
 ## 4. Behavior of the old gateway to replicate
 
@@ -342,7 +352,7 @@ Dev: `tower` (util), `http-body-util`.
 
 Removed from the reference: `vercel_runtime`, `reqwest`, `tiberius`, `bb8`, `bb8-tiberius`.
 
-Deferred crates: `sqlx` features `migrate` and `macros` (section 9, item 2a).
+Deferred crates: `sqlx` features `migrate` and `macros` (section 9, item 1a).
 
 ## 7. Phases
 
@@ -399,6 +409,22 @@ Status: finished on 2026-11-03. Clippy is clean and `cargo test --workspace` pas
 - Final test pass and a Docker run: done.
 - `release.yml`: done after Phase 4 (D46).
 
+### Phase 5: Kafka health `[DONE]`
+
+Goal: the broker's health in the main health checks and in a dedicated endpoint and page (D47 to D56).
+
+Status: built and verified live on 2026-11-04. 212 tests pass and clippy is clean. Against the Docker broker the unified check, `/api/v1/health/kafka` and `/healthz/kafka` returned the expected results, a stopped broker gave 503 `KAFKA_PROBE_FAILED` (portal pages stayed 200 with `DOWN`), and the health returned to UP after a restart. A secondary call that fails leaves its section `null` and adds a warning, as proposed. The live test also found the consumer bug of D54, now fixed (D54 to D56). Still to do: the health sections in `README.md`, `docs/dev-setup.md` and `docs/prod-setup.md`.
+
+- Spike done on 2026-11-04 by reading the kafkit-client 0.1.9 source. `describe_cluster` returns `cluster_id`, `controller_id` and brokers (`broker_id`, `host`, `port`, `rack`, `is_fenced`). `describe_topics` returns partitions with `leader_id`, `replica_nodes`, `isr_nodes`, `offline_replicas`. `describe_consumer_groups` returns `state` and `members`. `describe_log_dirs` returns `total_bytes`, `usable_bytes` and replica sizes per broker. The admin client opens a fresh connection for each call, so the single admin created at boot is reused for every probe and recovers after a broker restart. The admin request timeout is 30 s, so each probe call is wrapped in its own 3 s `tokio::time::timeout` (D52). The gateway has no connection state for the producer and consumer yet, so Phase 5 adds the counters of D53.
+- `src/kafka/health.rs`: the result types, the `KafkaProbe` trait and `CachedKafkaProbe` (the 5 s cache). `src/kafka/health_probe.rs`: the real probe on the shared admin client, with the 3 s timeouts.
+- `src/kafka/activity.rs`: the producer and consumer counters and the `stalled` flag (D53, D55). `producer.rs` and `consumer.rs` write them, and the consumer replaces itself after 3 failed polls (D54).
+- `src/features/v1/health/`: the `kafka` block in the unified response, the `/kafka` route, the model and the OpenAPI operation. `src/errors/catalog.rs` and `src/openapi/errors.rs`: `KAFKA_PROBE_FAILED` (503).
+- Portal: `src/components/healthz_kafka.rs`, the Kafka card in `healthz.rs`, the helpers in `health_parts.rs`, the route `/healthz/kafka` and a link on the home page.
+- Tests: `tests/kafka_health.rs` and `tests/kafka_activity.rs`, with `FakeKafkaProbe` in `tests/common/fakes.rs` (broker up or down). A failing detail call and a slow call are not covered by unit tests, only by the live checks.
+- A detail call that fails leaves its section `null`, a `warnings` entry names it, and `status` stays `UP`.
+- Docs: `README.md`, `docs/dev-setup.md`, `docs/prod-setup.md`.
+- Done when (met live on 2026-11-04): `cargo test` passes, the Docker broker shows the block in the unified check and the full result on `/api/v1/health/kafka`, and a stopped broker gives `DOWN` with 503.
+
 ## 8. `kafkit-client` 0.1.9
 
 Read from the crate source (2026-10-30). Not compiled or run.
@@ -447,5 +473,5 @@ Broker side (done by the user, not by the gateway): to carry messages above 1 MB
 2. Phase 2 database and auth.
 3. Phase 3 Kafka, starting with the `[VERIFY]` spike.
 4. Phase 4 delivery.
-5. `release.yml` (done, D46).`
+5. `release.yml` (done, D46).
 6. Later items (section 9), each as its own phase.

@@ -8,7 +8,7 @@ use crate::{
         store::{ApiKeyStore, DbProbe, UserStore},
     },
     kafka::{
-        publisher::Publisher, registry::TopicRegistry, reloader::TopicReload,
+        health::KafkaProbe, publisher::Publisher, registry::TopicRegistry, reloader::TopicReload,
         subscribers::SubscriberRegistry,
     },
 };
@@ -27,6 +27,9 @@ pub struct KafkaDeps {
 
     // The connected WebSocket subscribers
     pub subscribers: Arc<SubscriberRegistry>,
+
+    // Kafka broker health check
+    pub kafka_probe: Arc<dyn KafkaProbe>,
 
     // Turns true when the gateway shuts down
     pub shutdown: watch::Receiver<bool>,
@@ -59,6 +62,9 @@ pub struct AppState {
     // The connected WebSocket subscribers
     pub subscribers: Arc<SubscriberRegistry>,
 
+    // Kafka broker health check
+    pub kafka_probe: Arc<dyn KafkaProbe>,
+
     // Turns true when the gateway shuts down
     pub shutdown: watch::Receiver<bool>,
 
@@ -82,6 +88,7 @@ impl AppState {
             publisher: kafka.publisher,
             reloader: kafka.reloader,
             subscribers: kafka.subscribers,
+            kafka_probe: kafka.kafka_probe,
             shutdown: kafka.shutdown,
             ws_drain: kafka.ws_drain,
         }

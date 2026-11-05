@@ -82,8 +82,24 @@ Compose sets `stop_grace_period: 15s`, so Docker waits longer than the gateway's
 
 | Check | Request | Notes |
 | --- | --- | --- |
-| Process and DB state (portal) | `GET /healthz`, `/healthz/app`, `/healthz/db` | Always 200. The database state is in the body. |
-| Process and DB state (API) | `GET /api/v1/health`, `/api/v1/health/app`, `/api/v1/health/db` | Needs the `x-client-id` and `x-client-secret` headers. A database failure returns 503 `DB_PROBE_FAILED`. |
+| Portal (browser or JSON) | `GET /healthz`, `/healthz/app`, `/healthz/db`, `/healthz/kafka` | Always 200. The state of each part is in the body. |
+| API | `GET /api/v1/health`, `/api/v1/health/app`, `/api/v1/health/db`, `/api/v1/health/kafka` | Need the `x-client-id` and `x-client-secret` headers. A database failure returns 503 `DB_PROBE_FAILED`, a Kafka failure returns 503 `KAFKA_PROBE_FAILED`. |
+
+The unified checks (`/healthz` and `/api/v1/health`) show a small Kafka block with `status`, `brokerCount` and `latencyMs`. It is read live from the broker.
+
+`/healthz/kafka` and `/api/v1/health/kafka` return the full result:
+
+- the cluster and its brokers,
+- the gateway's own producer and consumer state (`consumer.stalled` is true when the consumer loop has had no good round for 30 seconds),
+- the partition health of every topic in the registry (under-replicated and leaderless partitions),
+- the consumer group (state and members),
+- the disk usage of each broker.
+
+The full result is cached for 5 seconds and carries `checkedAt`. A part that cannot be read is `null` and named in `warnings`, and the status stays `UP`. Every broker call has a 3 second timeout, so the endpoints always answer.
+
+If the broker restarts, the gateway reconnects its consumer on its own: after 3 failed polls in a row (about 9 seconds) it builds a new consumer and subscribes it to the same topics. Messages that were not acknowledged are delivered again. The log shows `CONSUMER_RECONNECTED`.
+
+The Kafka client library repeats warnings many times a second while the broker is down, so the default log filter shows only its errors. To see its warnings, set `RUST_LOG=info,kafkit_client=warn` in `.env.production`.
 
 ## 8. Network and TLS
 

@@ -23,6 +23,7 @@ use crate::{
         health::health,
         health::app_health,
         health::db_health,
+        health::kafka_health,
         auth::login,
         api_keys::create_api_key,
         http_publish::http_publish,

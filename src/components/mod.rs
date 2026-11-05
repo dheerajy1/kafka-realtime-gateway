@@ -3,6 +3,7 @@ pub mod health_parts;
 pub mod healthz;
 pub mod healthz_app;
 pub mod healthz_db;
+pub mod healthz_kafka;
 pub mod home;
 pub mod icons;
 pub mod layout;

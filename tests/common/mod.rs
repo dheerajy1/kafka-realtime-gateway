@@ -21,7 +21,7 @@ use serde_json::Value;
 use tokio::sync::{mpsc, watch};
 use tower::ServiceExt;
 
-use self::fakes::{FakePublisher, FakeReloader, FakeStore};
+use self::fakes::{FakeKafkaProbe, FakePublisher, FakeReloader, FakeStore};
 
 // Credentials the tests configure and send
 pub const TEST_CLIENT_ID: &str = "test-client";
@@ -65,6 +65,9 @@ pub struct KafkaFakes {
     // The connected WebSocket subscribers
     pub subscribers: Arc<SubscriberRegistry>,
 
+    // Answers the Kafka health checks, switch it down with set_up(false)
+    pub probe: Arc<FakeKafkaProbe>,
+
     // Send true to simulate a shutdown, it must stay alive as long as the state is used
     pub stop: watch::Sender<bool>,
 }
@@ -77,6 +80,7 @@ impl KafkaFakes {
             publisher: Arc::new(FakePublisher::new()),
             reloader: Arc::new(FakeReloader::new()),
             subscribers: Arc::new(SubscriberRegistry::new()),
+            probe: Arc::new(FakeKafkaProbe::new()),
             stop,
         }
     }
@@ -96,6 +100,7 @@ pub fn state_with_kafka(store: Arc<FakeStore>, fakes: &KafkaFakes) -> AppState {
             publisher: fakes.publisher.clone(),
             reloader: fakes.reloader.clone(),
             subscribers: fakes.subscribers.clone(),
+            kafka_probe: fakes.probe.clone(),
             shutdown: fakes.stop.subscribe(),
             ws_drain: mpsc::channel(1).0,
         },

@@ -1,8 +1,11 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use kafkit_client::{KafkaProducer, ProduceRecord, ProducerConfig, RecordHeader};
 use tokio::sync::RwLock;
 
 use super::{
+    activity::ProducerActivity,
     error::map_kafka_error,
     publisher::{PublishReceipt, PublishRecord, Publisher},
 };
@@ -17,11 +20,18 @@ const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 // The real publisher, one shared kafkit producer, None once it has been shut down
 pub struct KafkaPublisher {
     producer: RwLock<Option<KafkaProducer>>,
+
+    // Remembers the result of the last publish for the health result
+    activity: Arc<ProducerActivity>,
 }
 
 impl KafkaPublisher {
     // Connects to the brokers, fails when none is reachable so boot can exit (decision: connect at boot)
-    pub async fn connect(brokers: Vec<String>, client_id: &str) -> kafkit_client::Result<Self> {
+    pub async fn connect(
+        brokers: Vec<String>,
+        client_id: &str,
+        activity: Arc<ProducerActivity>,
+    ) -> kafkit_client::Result<Self> {
         // The constructor needs one address, the real list replaces it right after
         let config = ProducerConfig::new(String::new())
             .with_bootstrap_servers(brokers)
@@ -36,6 +46,7 @@ impl KafkaPublisher {
 
         Ok(Self {
             producer: RwLock::new(Some(producer)),
+            activity,
         })
     }
 }
@@ -61,10 +72,12 @@ impl Publisher for KafkaPublisher {
             .into_iter()
             .map(|(name, value)| RecordHeader::new(name, value));
 
-        let ack = producer
-            .send(message.with_headers(headers))
-            .await
-            .map_err(|err| map_kafka_error(&err))?;
+        let sent = producer.send(message.with_headers(headers)).await;
+
+        // The health result shows whether the last publish worked
+        self.activity.record(sent.is_ok());
+
+        let ack = sent.map_err(|err| map_kafka_error(&err))?;
 
         Ok(PublishReceipt {
             topic: ack.topic,

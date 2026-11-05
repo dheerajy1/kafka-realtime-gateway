@@ -450,6 +450,12 @@ pub mod service_unavailable {
         "Database connection validation probe failed",
         "Database is disconnected or unreachable",
     );
+
+    pub const KAFKA_PROBE_FAILED: CatalogEntry = CatalogEntry::new(
+        ErrorCode::ServiceUnavailable,
+        "Kafka broker connection validation probe failed",
+        "Kafka broker is disconnected or unreachable",
+    );
 }
 
 // 504 entries

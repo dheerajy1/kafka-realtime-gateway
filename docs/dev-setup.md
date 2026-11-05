@@ -83,6 +83,10 @@ The gateway listens on `http://localhost:<APP_PORT>`. Stop it with Ctrl+C: it cl
 
 The OpenAPI reference is at `/openapi` (Scalar UI) and `/openapi/json`. It describes the HTTP endpoints only. The WebSocket endpoints are in [websocket.md](websocket.md).
 
+Kafka health: `/healthz` and `/api/v1/health` show a small Kafka block, and `/healthz/kafka` (portal) and `/api/v1/health/kafka` (API) show the full result. See [prod-setup.md](prod-setup.md), section 7.
+
+The Kafka client library repeats warnings many times a second while the broker is down, so by default the log shows only its errors. To see its warnings, start with `RUST_LOG=info,kafkit_client=warn cargo dev`.
+
 ## 6. Checks
 
 Run these before every commit, in this order. CI runs the same checks.
@@ -104,7 +108,7 @@ cargo fmt && cargo check --workspace --all-targets 2>&1 | grep -Ev '^( *Compilin
 cargo clippy --workspace --all-targets --locked -- -D warnings
 ```
 
-### 6.5 Testing 
+### 6.3 Testing
 
 ```bash
 cargo test --workspace

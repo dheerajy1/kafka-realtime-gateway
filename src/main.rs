@@ -4,9 +4,12 @@ use kafka_api_gateway::{
     db::{pool, postgres::PgStore},
     features::v1::health::service,
     kafka::{
+        activity::{ConsumerActivity, ProducerActivity},
         admin::KafkaTopicLister,
         bridge::Bridge,
         consumer::BridgeConsumer,
+        health::CachedKafkaProbe,
+        health_probe::KafkaHealthProbe,
         parse_brokers,
         producer::KafkaPublisher,
         publisher::Publisher,
@@ -57,8 +60,18 @@ async fn main() -> std::io::Result<()> {
     let store = PgStore::new(default_pool, service_pool);
     let brokers = parse_brokers(&env.kafka_brokers);
 
+    // Remember what the producer and the consumer did last, the health check reads them
+    let producer_activity = Arc::new(ProducerActivity::default());
+    let consumer_activity = Arc::new(ConsumerActivity::default());
+
     // The producer connects now, the process exits if no broker is reachable
-    let publisher = match KafkaPublisher::connect(brokers.clone(), &env.kafka_client_id).await {
+    let publisher = match KafkaPublisher::connect(
+        brokers.clone(),
+        &env.kafka_client_id,
+        producer_activity.clone(),
+    )
+    .await
+    {
         Ok(publisher) => Arc::new(publisher),
         Err(error) => {
             tracing::error!(target: "Kafka", "Kafka producer connection failed: {error}");
@@ -77,20 +90,42 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
+    // The health probe shares this admin client
+    let probe_admin = lister.admin();
+
     // The consumer connects now, it subscribes once the topics are loaded
-    let consumer =
-        match BridgeConsumer::connect(brokers, &env.kafka_client_id, &env.kafka_group_id).await {
-            Ok(consumer) => Arc::new(consumer),
-            Err(error) => {
-                tracing::error!(target: "Kafka", "Kafka consumer connection failed: {error}");
-                std::process::exit(1);
-            }
-        };
+    let consumer = match BridgeConsumer::connect(
+        brokers,
+        &env.kafka_client_id,
+        &env.kafka_group_id,
+        consumer_activity.clone(),
+    )
+    .await
+    {
+        Ok(consumer) => Arc::new(consumer),
+        Err(error) => {
+            tracing::error!(target: "Kafka", "Kafka consumer connection failed: {error}");
+            std::process::exit(1);
+        }
+    };
 
     tracing::info!(target: "Kafka", "Kafka consumer connected");
 
     let topics = Arc::new(TopicRegistry::default());
     let subscribers = Arc::new(SubscriberRegistry::new());
+
+    // The probe reads the broker through the shared admin client, the full result is cached for 5 seconds (D51)
+    let kafka_probe = Arc::new(CachedKafkaProbe::new(
+        Arc::new(KafkaHealthProbe::new(
+            probe_admin,
+            &env.kafka_group_id,
+            topics.clone(),
+            subscribers.clone(),
+            producer_activity,
+            consumer_activity,
+        )),
+        Duration::from_secs(5),
+    ));
 
     // Turns true on shutdown, the sender lives in the graceful shutdown future below
     let (stop_tx, stop_rx) = watch::channel(false);
@@ -133,6 +168,7 @@ async fn main() -> std::io::Result<()> {
             publisher: publisher.clone(),
             reloader,
             subscribers,
+            kafka_probe,
             shutdown: stop_rx,
             ws_drain: drain_tx,
         },

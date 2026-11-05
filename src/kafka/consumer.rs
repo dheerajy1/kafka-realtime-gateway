@@ -1,16 +1,16 @@
-use std::{
-    collections::BTreeSet,
-    sync::{Mutex, MutexGuard, PoisonError},
-    time::Duration,
-};
-
 use async_trait::async_trait;
 use kafkit_client::{
     AutoOffsetReset, CommitOffset, ConsumerConfig, ConsumerRecord, KafkaConsumer, TopicPartition,
 };
+use std::{
+    collections::BTreeSet,
+    sync::{Arc, Mutex, MutexGuard, PoisonError},
+    time::Duration,
+};
 use tokio::sync::{RwLock, watch};
 
 use super::{
+    activity::ConsumerActivity,
     bridge::{Bridge, InboundRecord, Outcome},
     error::map_kafka_error,
     registry::TopicPolicy,
@@ -26,6 +26,12 @@ const RETRY_DELAY: Duration = Duration::from_secs(3);
 
 // How long the loop waits while there is nothing to subscribe to yet
 const IDLE_DELAY: Duration = Duration::from_secs(1);
+
+// After this many failed polls in a row the consumer is replaced by a new one, its connection is dead and does not recover by itself
+const RECONNECT_AFTER_FAILURES: u32 = 3;
+
+// How long closing an old consumer may take, one with a dead connection may never answer
+const CLOSE_TIMEOUT: Duration = Duration::from_secs(3);
 
 // Largest message the consumer can fetch, the 10 MB message limit (D11) plus overhead, same as the producer
 const MAX_PARTITION_BYTES: i32 = 11 * 1024 * 1024;
@@ -45,6 +51,12 @@ pub struct BridgeConsumer {
     // None once the consumer was shut down
     consumer: RwLock<Option<KafkaConsumer>>,
     state: Mutex<State>,
+
+    // Needed to build a new consumer after a broken connection
+    config: ConsumerConfig,
+
+    // Remembers what the loop did last for the health result
+    activity: Arc<ConsumerActivity>,
 }
 
 impl BridgeConsumer {
@@ -53,6 +65,7 @@ impl BridgeConsumer {
         brokers: Vec<String>,
         client_id: &str,
         group_id: &str,
+        activity: Arc<ConsumerActivity>,
     ) -> kafkit_client::Result<Self> {
         // The constructor needs one address, the real list replaces it right after
         let config = ConsumerConfig::new(String::new(), group_id)
@@ -63,8 +76,10 @@ impl BridgeConsumer {
             .with_partition_max_bytes(MAX_PARTITION_BYTES);
 
         Ok(Self {
-            consumer: RwLock::new(Some(KafkaConsumer::connect(config).await?)),
+            consumer: RwLock::new(Some(KafkaConsumer::connect(config.clone()).await?)),
             state: Mutex::new(State::default()),
+            config,
+            activity,
         })
     }
 
@@ -138,9 +153,16 @@ impl BridgeConsumer {
     // A failing consumer is retried every few seconds and the same error is logged once
     pub async fn run(&self, bridge: &Bridge, mut shutdown: watch::Receiver<bool>) {
         let mut last_error = String::new();
+        let mut last_reconnect_error = String::new();
+        let mut failures: u32 = 0;
+
+        self.activity.set_running(true);
 
         while !*shutdown.borrow() {
             if self.state().subscribed.is_empty() {
+                // Nothing to read yet is not a failure, the loop is alive
+                self.activity.record_ok();
+
                 tokio::select! {
                     _ = tokio::time::sleep(IDLE_DELAY) => {}
                     _ = shutdown.changed() => {}
@@ -159,10 +181,14 @@ impl BridgeConsumer {
             let records = match polled {
                 Ok(records) => {
                     last_error.clear();
+                    last_reconnect_error.clear();
+                    failures = 0;
+                    self.activity.record_ok();
                     records
                 }
                 Err(error) => {
                     let text = error.to_string();
+                    self.activity.record_error(&text);
                     if text != last_error {
                         tracing::error!(
                             target: "WsBridge",
@@ -171,6 +197,37 @@ impl BridgeConsumer {
                         );
                         last_error = text;
                     }
+
+                    failures += 1;
+
+                    // A consumer with a broken connection does not recover by itself, so it is replaced
+                    if failures >= RECONNECT_AFTER_FAILURES {
+                        match self.reconnect().await {
+                            Ok(()) => {
+                                tracing::info!(
+                                    target: "WsBridge",
+                                    "CONSUMER_RECONNECTED after {failures} failed polls"
+                                );
+                                failures = 0;
+                                last_error.clear();
+                                last_reconnect_error.clear();
+                                continue;
+                            }
+                            Err(error) => {
+                                let text = error.to_string();
+                                self.activity.record_error(&text);
+                                if text != last_reconnect_error {
+                                    tracing::error!(
+                                        target: "WsBridge",
+                                        "CONSUMER_RECONNECT_FAILED {text}, retrying every {}s",
+                                        RETRY_DELAY.as_secs()
+                                    );
+                                    last_reconnect_error = text;
+                                }
+                            }
+                        }
+                    }
+
                     tokio::select! {
                         _ = tokio::time::sleep(RETRY_DELAY) => {}
                         _ = shutdown.changed() => {}
@@ -183,6 +240,8 @@ impl BridgeConsumer {
                 break;
             }
         }
+
+        self.activity.set_running(false);
     }
 
     // Processes one poll in order, returns true when the loop has to stop
@@ -252,6 +311,38 @@ impl BridgeConsumer {
         false
     }
 
+    // Replaces the consumer with a new one that is subscribed to the same topics
+    // The offsets committed by the group stay in Kafka, so the new consumer continues where the old one stopped
+    async fn reconnect(&self) -> kafkit_client::Result<()> {
+        let fresh = KafkaConsumer::connect(self.config.clone()).await?;
+
+        let topics: Vec<String> = self.state().subscribed.iter().cloned().collect();
+        if !topics.is_empty() {
+            fresh.subscribe(topics).await?;
+        }
+
+        let old = {
+            let mut guard = self.consumer.write().await;
+
+            // The gateway is shutting down, the new consumer is not needed
+            if guard.is_none() {
+                close_in_background(fresh);
+                return Ok(());
+            }
+
+            guard.replace(fresh)
+        };
+
+        // The new consumer starts with nothing paused, the bridge pauses a disabled topic again when its next message arrives
+        self.state().paused.clear();
+
+        if let Some(old) = old {
+            close_in_background(old);
+        }
+
+        Ok(())
+    }
+
     // Closes the consumer, called after the loop has stopped
     pub async fn shutdown(&self) {
         let Some(consumer) = self.consumer.write().await.take() else {
@@ -262,6 +353,13 @@ impl BridgeConsumer {
             tracing::error!(target: "WsBridge", "consumer shutdown failed: {error}");
         }
     }
+}
+
+// Closes a consumer without waiting for it, one with a dead connection may never answer
+fn close_in_background(consumer: KafkaConsumer) {
+    tokio::spawn(async move {
+        let _ = tokio::time::timeout(CLOSE_TIMEOUT, consumer.shutdown()).await;
+    });
 }
 
 // Detaches a Kafka record from the client types, headers without a value are left out

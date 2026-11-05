@@ -1,7 +1,10 @@
+pub mod activity;
 pub mod admin;
 pub mod bridge;
 pub mod consumer;
 pub mod error;
+pub mod health;
+pub mod health_probe;
 pub mod inbound;
 pub mod producer;
 pub mod publisher;

@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use kafkit_client::{AdminConfig, KafkaAdmin};
@@ -18,7 +18,7 @@ pub trait TopicLister: Send + Sync {
 
 // The real topic lister, one admin client created at boot and reused for every check
 pub struct KafkaTopicLister {
-    admin: KafkaAdmin,
+    admin: Arc<KafkaAdmin>,
 }
 
 impl KafkaTopicLister {
@@ -31,8 +31,13 @@ impl KafkaTopicLister {
             .with_request_timeout(REQUEST_TIMEOUT);
 
         Ok(Self {
-            admin: KafkaAdmin::connect(config).await?,
+            admin: Arc::new(KafkaAdmin::connect(config).await?),
         })
+    }
+
+    // Returns the same admin client, the health check reuses it
+    pub fn admin(&self) -> Arc<KafkaAdmin> {
+        self.admin.clone()
     }
 }
 

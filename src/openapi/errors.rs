@@ -21,6 +21,7 @@ const OPERATION_ERRORS: &[(&str, &[CatalogEntry])] = &[
             unauthorized::MISSING_AUTH_HEADERS,
             bad_request::INVALID_HEADER_VALUES,
             service_unavailable::DB_PROBE_FAILED,
+            service_unavailable::KAFKA_PROBE_FAILED,
         ],
     ),
     (
@@ -36,6 +37,14 @@ const OPERATION_ERRORS: &[(&str, &[CatalogEntry])] = &[
             unauthorized::MISSING_AUTH_HEADERS,
             bad_request::INVALID_HEADER_VALUES,
             service_unavailable::DB_PROBE_FAILED,
+        ],
+    ),
+    (
+        "health_kafka",
+        &[
+            unauthorized::MISSING_AUTH_HEADERS,
+            bad_request::INVALID_HEADER_VALUES,
+            service_unavailable::KAFKA_PROBE_FAILED,
         ],
     ),
     (

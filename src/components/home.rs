@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use crate::components::layout::Layout;
 
 // Navigation links shown at the top of the Home page as (href, label)
-const NAV_LINKS: [(&str, &str); 7] = [
+const NAV_LINKS: [(&str, &str); 8] = [
     ("/", "Home"),
     ("/about", "About"),
     ("/openapi/json", "OpenAPI spec"),
@@ -11,6 +11,7 @@ const NAV_LINKS: [(&str, &str); 7] = [
     ("/healthz", "Health"),
     ("/healthz/app", "Health app"),
     ("/healthz/db", "Health db"),
+    ("/healthz/kafka", "Health kafka"),
 ];
 
 // Home page rendered inside the shared Layout
