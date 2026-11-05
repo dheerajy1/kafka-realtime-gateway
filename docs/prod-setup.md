@@ -13,7 +13,7 @@ The gateway is one container, `kafka-api-gateway`, built from `docker/Dockerfile
 - Docker with Compose.
 - The Tailwind CSS CLI on `PATH`, because `cargo docker-build` compiles the stylesheet first.
 - PostgreSQL with the `kafka_api_gateway_db` database (see [dev-setup.md](dev-setup.md), section 3), reachable from the container.
-- A Kafka broker with a listener on port 9094 that advertises `host.docker.internal:9094` (see [dev-setup.md](dev-setup.md), section 4).
+- A Kafka broker on port 9092 that advertises `host.docker.internal:9092` (see [dev-setup.md](dev-setup.md), section 4).
 
 ## 3. Environment file
 
@@ -25,7 +25,7 @@ It has the same 15 variables as `.env.development` (see [dev-setup.md](dev-setup
 | --- | --- |
 | `APP_ENV` | `production` |
 | `ONPREM_DB_SERVER` | `host.docker.internal` |
-| `KAFKA_BROKERS` | `host.docker.internal:9094` |
+| `KAFKA_BROKERS` | `host.docker.internal:9092` |
 
 Use your own secrets here. Do not reuse the development ones.
 
@@ -121,4 +121,4 @@ cargo build-prod
 cargo start
 ```
 
-Both read `.env.production`. On the host, set `ONPREM_DB_SERVER` and `KAFKA_BROKERS` to host-local addresses (`localhost`, port 9092) instead of the `host.docker.internal` values.
+Both read `.env.production`. On the host, `KAFKA_BROKERS` can stay `host.docker.internal:9092`, because the name resolves through `/etc/hosts`. Set `ONPREM_DB_SERVER` to a host-local address (`localhost`) instead of `host.docker.internal`.

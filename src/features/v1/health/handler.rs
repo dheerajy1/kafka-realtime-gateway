@@ -215,7 +215,7 @@ pub async fn db_health(
                         "clusterId": "MkU3OEVBNTcwNTJENDM2Qk",
                         "controllerId": 1,
                         "brokers": [
-                            { "id": 1, "host": "host.docker.internal", "port": 9094, "rack": null, "fenced": false }
+                            { "id": 1, "host": "host.docker.internal", "port": 9092, "rack": null, "fenced": false }
                         ]
                     },
                     "gateway": {

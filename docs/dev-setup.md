@@ -40,7 +40,7 @@ Every variable below is required. A missing or invalid value stops the gateway a
 | `ONPREM_DB_DATABASE` | 1 to 50 chars | Database name. |
 | `ONPREM_DB_USER_PUBLIC`, `ONPREM_DB_PASSWORD_PUBLIC` | 1 to 50 chars each | The public database login. |
 | `ONPREM_DB_USER_SERVICE`, `ONPREM_DB_PASSWORD_SERVICE` | 1 to 50 chars each | The service database login. The gateway connects with it at startup. |
-| `KAFKA_BROKERS` | at least 1 char | Broker address list. `localhost:9092` for local runs. |
+| `KAFKA_BROKERS` | at least 1 char | Broker address list. `host.docker.internal:9092` for local runs and Docker. |
 | `KAFKA_CLIENT_ID` | 1 to 100 chars | Kafka client id. |
 | `KAFKA_GROUP_ID` | 1 to 100 chars | Kafka consumer group id. |
 
@@ -60,15 +60,33 @@ The gateway reads topics, users and API keys only through those functions.
 
 ## 4. Kafka
 
-Local runs use a broker on `localhost:9092`. The Docker container reaches the same broker on `host.docker.internal:9094`, so the broker needs two listeners:
+The gateway reaches the broker as `host.docker.internal:9092`, both on the host (`cargo dev`) and in Docker. The broker has one listener on port 9092 and advertises `host.docker.internal:9092`. The name resolves in three places:
 
-| Listener | Port | Advertised address | Used by |
-| --- | --- | --- | --- |
-| `PLAINTEXT` | 9092 | `localhost:9092` | the gateway running on the host (`cargo dev`) |
-| `PLAINTEXT_HOST` | 9094 | `host.docker.internal:9094` | the gateway running in Docker |
+| Where | How `host.docker.internal` resolves |
+| --- | --- |
+| The gateway on the host | the line `127.0.0.1 host.docker.internal` in `/etc/hosts` |
+| The gateway in Docker | Compose `extra_hosts: host.docker.internal:host-gateway` |
+| Tools inside the Kafka container | the same `extra_hosts` entry in the Kafka Compose file |
 
-Set `KAFKA_BROKERS` to match: `localhost:9092` in `.env.development`, `host.docker.internal:9094` in `.env.production`.
+Set `KAFKA_BROKERS=host.docker.internal:9092` in `.env.development` and `.env.production`.
 
+Settings for the Kafka container (Compose):
+
+```yaml
+ports:
+  - "9092:9092"
+extra_hosts:
+  - "host.docker.internal:host-gateway"
+environment:
+  KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+  KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://host.docker.internal:9092
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+  KAFKA_LOG_DIRS: /var/lib/kafka/data
+volumes:
+  - kafka-data:/var/lib/kafka/data
+```
+
+`KAFKA_LOG_DIRS` must point at the mounted volume. Otherwise topics are stored inside the container and are lost when it is recreated.
 Messages up to 10 MB are accepted by the gateway. To carry more than 1 MB through Kafka, raise the broker `message.max.bytes`, the topic `max.message.bytes` and the replica fetch limit.
 
 Every topic the gateway may use needs a Kafka topic and a row in `kafka_topic`. After changing the rows, call `POST /api/v1/topics/reload` (or restart the gateway).
