@@ -91,35 +91,59 @@ The Kafka client library repeats warnings many times a second while the broker i
 
 Run these before every commit, in this order. CI runs the same checks.
 
-### 6.1 format and check
+### 6.1 format
+
+```bash
+cargo fmt
+```
+### 6.2 check
+
+```bash
+cargo check --workspace --all-targets
+```
+- reduce noise
+
+```bash
+cargo check --workspace --all-targets 2>&1 | grep -Ev '^( *Compiling| *Checking [^ ]+ v[^ ]+$)'
+```
+
+### 6.3 format and check
 
 ```bash
 cargo fmt && cargo check --workspace --all-targets
 ```
+
 - reduce noise
 
 ```bash
 cargo fmt && cargo check --workspace --all-targets 2>&1 | grep -Ev '^( *Compiling| *Checking [^ ]+ v[^ ]+$)'
 ```
 
-### 6.2 clippy
+### 6.4 clippy
 
 ```bash
 cargo clippy --workspace --all-targets --locked -- -D warnings
 ```
 
-### 6.3 Testing
+### 6.5 Testing
 
 ```bash
 cargo test --workspace
 ```
+
 - reduce noise
 
 ```bash
 cargo test --workspace 2>&1 | grep -P '^(?!.*SIGTERM).*(Finished|Running|test result|FAILED|panicked|error|Doc-tests)'
 ```
 
-### 6.4 Combined
+### 6.6 Combined
+
+```bash
+cargo fmt && cargo check --workspace --all-targets && cargo clippy --workspace --all-targets --locked -- -D warnings && cargo test --workspace
+```
+
+- reduce noise
 
 ```bash
 cargo fmt && cargo check --workspace --all-targets 2>&1 | grep -Ev '^( *Compiling| *Checking [^ ]+ v[^ ]+$)' && cargo clippy --workspace --all-targets --locked -- -D warnings && cargo test --workspace 2>&1 | grep -P '^(?!.*SIGTERM).*(Finished|Running|test result|FAILED|panicked|error|Doc-tests)'
