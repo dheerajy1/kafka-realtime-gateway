@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/dheerajy1/kafka-realtime-gateway/compare/v1.0.1...v1.1.0) (2026-11-03)
+
+
+### Features
+
+* **gateway:** strengthen Kafka gateway architecture, reliability, and topic management ([#3](https://github.com/dheerajy1/kafka-realtime-gateway/issues/3)) ([1b29462](https://github.com/dheerajy1/kafka-realtime-gateway/commit/1b2946215d81c0e556a81d0ec4defe6f3f5c539f))
+
 ## [1.0.1](https://github.com/dheerajy1/kafka-realtime-gateway/compare/v1.0.0...v1.0.1) (2026-08-08)
 
 
