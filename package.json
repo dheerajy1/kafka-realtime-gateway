@@ -1,6 +1,6 @@
 {
   "name": "kafka-api-gateway",
-  "version": "1.1.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,10 +10,11 @@
     "test:http-publish": "bun --env-file=.env.development test src/routes/v1/kafka/__tests__",
     "test:bridge-topics": "bun --env-file=.env.development test src/lib/kafka-ws-bridge",
     "dev": "bunx tailwindcss -i ./src/tailwind.css -o ./public/global.css && bun --env-file=.env.development --hot src/server.ts",
-    "build": "bun run clean && bunx tailwindcss -i ./src/tailwind.css -o ./public/global.css && tsc && tsc-alias && cp -r public dist/public",
+    "build": "bun run clean:dist && bunx tailwindcss -i ./src/tailwind.css -o ./public/global.css && tsc && cp package.json dist/package.json && tsc-alias && cp -r public dist/public",
     "start": "bun --env-file=.env.production dist/server.js",
-    "clean": "rm -rf dist/* dist/.* || true",
+    "clean": "rm -rf node_modules dist || true",
     "clean:nm": "rm -rf node_modules",
+    "clean:dist": "rm -rf dist || true",
     "hash": "bun src/scripts/hash.ts",
     "docker:build": "docker compose -f docker/docker-compose.yml build",
     "docker:up": "docker compose -f docker/docker-compose.yml up -d",
