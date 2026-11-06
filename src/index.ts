@@ -40,16 +40,25 @@ const app = new Elysia()
         },
       },
       exclude: {
-        paths: ["/*", "/", "/login", "/home", "/about", "/healthz/app", "/healthz/db", "/healthz"],
+        paths: [
+          "/*",
+          "/",
+          "/login",
+          "/home",
+          "/about",
+          "/healthz/app",
+          "/healthz/db",
+          "/healthz",
+        ],
       },
     }),
   )
   .onError(({ error, status, code }) => {
     switch (true) {
       case error instanceof MyError:
-        return status(error.httpCode, {
+        return status(error.statusCode, {
           success: false,
-          httpCode: error.httpCode,
+          statusCode: error.statusCode,
           code: error.code,
           message: error.message,
           error: error.error,
@@ -58,7 +67,7 @@ const app = new Elysia()
       case error instanceof ZodError:
         return status(400, {
           success: false,
-          httpCode: 400,
+          statusCode: 400,
           code: error.name,
           message: error.message,
           error: error.issues,
@@ -67,7 +76,7 @@ const app = new Elysia()
       case code === "VALIDATION":
         return status(error.status, {
           success: false,
-          httpCode: error.status,
+          statusCode: error.status,
           code: error.code,
           message: error.messageValue?.path
             ? Array.isArray(error.messageValue.path)
@@ -80,7 +89,7 @@ const app = new Elysia()
       default:
         return status(500, {
           success: false,
-          httpCode: 500,
+          statusCode: 500,
           code: "INTERNAL_SERVER_ERROR",
           message: errors.INTERNAL_SERVER_ERROR.SERVER_ERROR.message,
           error: errors.INTERNAL_SERVER_ERROR.SERVER_ERROR.error,

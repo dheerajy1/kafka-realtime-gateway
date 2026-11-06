@@ -30,7 +30,7 @@ type ErrorMessageType = {
  */
 export const errors = {
   UNAUTHORIZED: {
-    httpCode: 401,
+    statusCode: 401,
     MESSAGE:
       "The client request has not been completed because it lacks valid authentication credentials for the requested resource.",
 
@@ -95,7 +95,7 @@ export const errors = {
   },
 
   BAD_REQUEST: {
-    httpCode: 400,
+    statusCode: 400,
     MESSAGE:
       "The server cannot process the request because the input provided is invalid.",
 
@@ -121,7 +121,7 @@ export const errors = {
   },
 
   FORBIDDEN: {
-    httpCode: 403,
+    statusCode: 403,
     MESSAGE: "You do not have permission to access the requested resource.",
 
     DETAIL: "Insufficient access",
@@ -133,7 +133,7 @@ export const errors = {
   },
 
   NOT_FOUND: {
-    httpCode: 404,
+    statusCode: 404,
     MESSAGE: "The requested resource could not be found.",
 
     DETAIL: "Resource not found",
@@ -146,7 +146,7 @@ export const errors = {
   },
 
   CONFLICT: {
-    httpCode: 409,
+    statusCode: 409,
     MESSAGE:
       "The request could not be completed due to a conflict with the current state of the resource.",
 
@@ -186,7 +186,7 @@ export const errors = {
   },
 
   PRECONDITION_FAILED: {
-    httpCode: 412,
+    statusCode: 412,
     MESSAGE: "Access to the target resource has been denied.",
     DETAIL: "Precondition failed",
 
@@ -206,7 +206,7 @@ export const errors = {
   },
 
   PAYLOAD_TOO_LARGE: {
-    httpCode: 413,
+    statusCode: 413,
     MESSAGE: "Request entity is larger than limits defined by server.",
     DETAIL: "Payload too large",
 
@@ -226,7 +226,7 @@ export const errors = {
   },
 
   UNSUPPORTED_MEDIA_TYPE: {
-    httpCode: 415,
+    statusCode: 415,
     MESSAGE:
       "The server refuses to accept the request because the payload format is in an unsupported format.",
     DETAIL: "Unsupported media type",
@@ -247,7 +247,7 @@ export const errors = {
   },
 
   UNPROCESSABLE_CONTENT: {
-    httpCode: 422,
+    statusCode: 422,
     MESSAGE:
       "The server understands the request method, and the request entity is correct, but the server was unable to process it.",
     DETAIL: "Unprocessable entity",
@@ -268,7 +268,7 @@ export const errors = {
   },
 
   PRECONDITION_REQUIRED: {
-    httpCode: 428,
+    statusCode: 428,
     MESSAGE:
       "The server cannot process the request because a required precondition header is missing.",
     DETAIL: "Precondition required",
@@ -285,7 +285,7 @@ export const errors = {
   },
 
   TOO_MANY_REQUESTS: {
-    httpCode: 429,
+    statusCode: 429,
     MESSAGE:
       "The rate limit has been exceeded or too many requests are being sent to the server.",
     DETAIL: "Too many requests",
@@ -306,7 +306,7 @@ export const errors = {
   },
 
   CLIENT_CLOSED_REQUEST: {
-    httpCode: 499,
+    statusCode: 499,
     MESSAGE: "Access to the resource has been denied.",
     DETAIL: "Client closed request",
 
@@ -322,7 +322,7 @@ export const errors = {
   },
 
   INTERNAL_SERVER_ERROR: {
-    httpCode: 500,
+    statusCode: 500,
     MESSAGE: "An unexpected error occurred while processing your request.",
     DETAIL: "Internal server error",
 
@@ -366,7 +366,7 @@ export const errors = {
   },
 
   NOT_IMPLEMENTED: {
-    httpCode: 501,
+    statusCode: 501,
     MESSAGE:
       "The server does not support the functionality required to fulfill the request.",
     DETAIL: "Not implemented",
@@ -382,7 +382,7 @@ export const errors = {
   },
 
   BAD_GATEWAY: {
-    httpCode: 502,
+    statusCode: 502,
     MESSAGE:
       "The server received an invalid response from the upstream server.",
     DETAIL: "Bad gateway",
@@ -398,7 +398,7 @@ export const errors = {
   },
 
   SERVICE_UNAVAILABLE: {
-    httpCode: 503,
+    statusCode: 503,
     MESSAGE: "The server is not ready to handle the request.",
     DETAIL: "Service unavailable",
 
@@ -423,7 +423,7 @@ export const errors = {
   },
 
   GATEWAY_TIMEOUT: {
-    httpCode: 504,
+    statusCode: 504,
     MESSAGE:
       "The server did not get a response in time from the upstream server.",
     DETAIL: "Gateway timeout",
@@ -440,7 +440,7 @@ export const errors = {
   },
 
   PAYMENT_REQUIRED: {
-    httpCode: 402,
+    statusCode: 402,
     MESSAGE:
       "The client request requires payment to access the requested resource.",
     DETAIL: "Payment required",
@@ -451,7 +451,7 @@ export const errors = {
   },
 
   METHOD_NOT_SUPPORTED: {
-    httpCode: 405,
+    statusCode: 405,
     MESSAGE:
       "The server knows the request method, but the target resource doesn't support this method.",
     DETAIL: "Method not allowed",
@@ -462,7 +462,7 @@ export const errors = {
   },
 
   TIMEOUT: {
-    httpCode: 408,
+    statusCode: 408,
     MESSAGE: "The server would like to shut down this unused connection.",
     DETAIL: "Request timeout",
     REQUEST_TIMEOUT: {
@@ -478,15 +478,15 @@ export const errors = {
  * ===============================================
  */
 
-function getHttpCode(code: ErrorCode): number {
+function getstatusCode(code: ErrorCode): number {
   const entry = errors[code];
-  return entry?.httpCode ?? 500;
+  return entry?.statusCode ?? 500;
 }
 
 export class MyError extends Error {
   code: ErrorCode;
   error: string;
-  httpCode: number;
+  statusCode: number;
 
   constructor(input: { code: ErrorCode; message: string; error: string }) {
     super(input.message);
@@ -494,7 +494,7 @@ export class MyError extends Error {
 
     this.code = input.code;
     this.error = input.error;
-    this.httpCode = getHttpCode(input.code);
+    this.statusCode = getstatusCode(input.code);
 
     // better stack trace in Node
     Error.captureStackTrace?.(this, MyError);
@@ -519,7 +519,7 @@ export function errorResponses(refs: ErrorRef[]) {
     const entry = errors[code];
     if (!entry) return;
 
-    const httpCode = entry.httpCode ?? 500;
+    const statusCode = entry.statusCode ?? 500;
 
     const subKeys = Array.isArray(subKey) ? subKey : [subKey];
 
@@ -547,7 +547,7 @@ export function errorResponses(refs: ErrorRef[]) {
     const schema = z
       .object({
         success: z.literal(false),
-        httpCode: z.literal(httpCode),
+        statusCode: z.literal(statusCode),
         code: z.literal(code),
         message:
           messageValues.length === 1
@@ -566,7 +566,7 @@ export function errorResponses(refs: ErrorRef[]) {
             {
               value: {
                 success: false,
-                httpCode: httpCode,
+                statusCode: statusCode,
                 code: code,
                 message: messageValues[i],
                 error: errorValues[i],
@@ -576,7 +576,7 @@ export function errorResponses(refs: ErrorRef[]) {
         ),
       });
 
-    res[httpCode] = schema;
+    res[statusCode] = schema;
   });
 
   return res;
@@ -589,7 +589,7 @@ export function errorResponses(refs: ErrorRef[]) {
 type SubEntry = { message: string; error: string };
 
 type ErrorCatalogEntry = {
-  httpCode: number;
+  statusCode: number;
   MESSAGE?: string;
   DETAIL?: string;
 } & Record<string, SubEntry | number | string | undefined>;
@@ -642,7 +642,7 @@ export function apiResponses({
     const entry = errors[code] as ErrorCatalogEntry;
     if (!entry) return;
 
-    const httpCode = entry.httpCode ?? 500;
+    const statusCode = entry.statusCode ?? 500;
     const subKeys = Array.isArray(subKey) ? subKey : [subKey];
 
     const messageValues: string[] = [];
@@ -671,7 +671,7 @@ export function apiResponses({
         {
           value: {
             success: false,
-            httpCode,
+            statusCode,
             code,
             message: messageValues[i],
             error: errorValues[i],
@@ -680,7 +680,7 @@ export function apiResponses({
       ]),
     );
 
-    detailResponses[httpCode] = {
+    detailResponses[statusCode] = {
       description:
         typeof entry.DETAIL === "string"
           ? entry.DETAIL
