@@ -73,7 +73,7 @@ async fn valid_request_is_published_and_returns_202() {
 
     let json = body_json(response).await;
     assert_eq!(json["success"], true);
-    assert_eq!(json["httpCode"], 202);
+    assert_eq!(json["statusCode"], 202);
     assert_eq!(json["message"], "Event accepted");
     assert_eq!(json["data"]["topic"], "orders");
     assert_eq!(json["data"]["correlationId"], CORRELATION_ID);

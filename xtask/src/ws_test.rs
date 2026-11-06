@@ -235,7 +235,7 @@ fn auth_failure(args: &Args) -> Step {
 
     let frame = client.read_json(EXPECTED)?;
     expect(&frame, "/type", json!("error"))?;
-    expect(&frame, "/httpCode", json!(401))?;
+    expect(&frame, "/statusCode", json!(401))?;
 
     let code = client.read_close_code(EXPECTED)?;
     if code != 4001 {

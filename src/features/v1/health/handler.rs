@@ -40,7 +40,7 @@ pub fn router() -> Router<crate::state::AppState> {
             body = SuccessResponse<HealthData>,
             example = json!({
                 "success": true,
-                "httpCode": 200,
+                "statusCode": 200,
                 "message": "Health check OK",
                 "data": {
                     "app": {
@@ -115,7 +115,7 @@ pub async fn health(
             body = SuccessResponse<AppHealthData>,
             example = json!({
                 "success": true,
-                "httpCode": 200,
+                "statusCode": 200,
                 "message": "Application is running",
                 "data": {
                     "status": "UP",
@@ -155,7 +155,7 @@ pub async fn app_health(_auth: NoAuth) -> Json<SuccessResponse<AppHealthData>> {
             body = SuccessResponse<DbHealthData>,
             example = json!({
                 "success": true,
-                "httpCode": 200,
+                "statusCode": 200,
                 "message": "Database connection successful",
                 "data": {
                     "status": "UP",
@@ -204,7 +204,7 @@ pub async fn db_health(
             body = SuccessResponse<KafkaHealthFull>,
             example = json!({
                 "success": true,
-                "httpCode": 200,
+                "statusCode": 200,
                 "message": "Kafka connection successful",
                 "data": {
                     "status": "UP",

@@ -96,9 +96,9 @@ API routes (all need `x-client-id` and `x-client-secret`):
 | Route | Extra auth | Notes |
 | --- | --- | --- |
 | `GET /api/v1/health`, `/health/app`, `/health/db` | none | DB down returns 503 `DB_PROBE_FAILED` |
-| `POST /api/v1/login` | none | body `username` (min 1), `password` (min 6). Returns `{success, httpCode:200, message, data:{token, expiresAt}}`. |
+| `POST /api/v1/login` | none | body `username` (min 1), `password` (min 6). Returns `{success, statusCode:200, message, data:{token, expiresAt}}`. |
 | `POST /api/v1/api-keys` | JWT (`Authorization: Bearer`) | Generates a random 32-byte hex secret, bcrypt-hashes it, calls `fn_create_api_key`, returns the secret once. Any DB failure becomes 409 `DATABASE_CONFLICT`. |
-| `POST /api/v1/http-publish` | API key (`x-api-key`, `x-api-secret`) | Body `{topic (min 1), correlationId (UUIDv7), value (any JSON)}`. Publishes `value` as JSON with the correlation ID as Kafka key. Returns 202 `{success:true, httpCode:202, message, data:{topic, correlationId}}`. |
+| `POST /api/v1/http-publish` | API key (`x-api-key`, `x-api-secret`) | Body `{topic (min 1), correlationId (UUIDv7), value (any JSON)}`. Publishes `value` as JSON with the correlation ID as Kafka key. Returns 202 `{success:true, statusCode:202, message, data:{topic, correlationId}}`. |
 | `WS /api/v1/ws-publish` | API key | See 4.6 |
 | `WS /api/v1/ws-subscribe` | API key plus `x-subscriber-id` | See 4.5 |
 
@@ -140,7 +140,7 @@ In Rust the gate is a `route_layer`, so it only wraps routes that exist (see D13
 ### 2.9 Errors and responses
 
 - Start from the reference `catalog.rs` unchanged and add two entries the old gateway needs: `DB_PERMISSION_DENIED` and `DB_CONNECTION_ERROR`. Keep all unused reference entries.
-- Error shape stays `{success:false, httpCode, code, message, error}`. Success shapes use `httpCode` (see D1).
+- Error shape stays `{success:false, statusCode, code, message, error}`. Success shapes use `statusCode` (see D1).
 - Postgres error mapping:
 
 | Postgres signal | Result |
@@ -182,7 +182,7 @@ Max 5 connections and 120 s idle timeout per pool. The app never selects the `ka
 
 | ID | Change | Status |
 | --- | --- | --- |
-| D1 | Every response uses `httpCode`. The old gateway mixed in `statusCode` on `/http-publish` success, portal login errors and `POST /api/v1/api-keys` success. | `[DECIDED]` |
+| D1 | Every response uses `statusCode`. The old gateway mixed in `statusCode` on `/http-publish` success, portal login errors and `POST /api/v1/api-keys` success. | `[DECIDED]` |
 | D2 | App health returns only `status`, `version`, `uptimeMs`, `timestampUtc`. The Bun-specific `systemMemoryMetrics` is dropped. Version comes from `CARGO_PKG_VERSION`. | `[DECIDED]` |
 | D3 | `/openapi` and `/openapi/json` are behind the portal gate. In the old gateway they were registered before the gate, so they were public. | `[DECIDED]` |
 | D4 | Validation failures (bad body or header values) use the catalog: `BAD_REQUEST / INVALID_INPUT` for bodies and `INVALID_HEADER_VALUES` for headers, with the exact field or header problem in the `error` text (for example `"topic" must not be empty`). The old gateway returned Elysia's own `VALIDATION` shape. | `[DECIDED]` |

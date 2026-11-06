@@ -21,7 +21,7 @@ async fn unknown_path_returns_404_error_shape() {
     let body = body_json(response).await;
 
     assert_eq!(body["success"], false);
-    assert_eq!(body["httpCode"], 404);
+    assert_eq!(body["statusCode"], 404);
     assert_eq!(body["code"], "NOT_FOUND");
     assert!(body["message"].is_string());
     assert!(body["error"].is_string());
@@ -37,7 +37,7 @@ async fn wrong_method_returns_405_error_shape() {
     let body = body_json(response).await;
 
     assert_eq!(body["success"], false);
-    assert_eq!(body["httpCode"], 405);
+    assert_eq!(body["statusCode"], 405);
     assert_eq!(body["code"], "METHOD_NOT_SUPPORTED");
 }
 
@@ -62,7 +62,7 @@ async fn panic_returns_500_error_shape_without_panic_text() {
     let body: serde_json::Value = serde_json::from_str(&text).unwrap();
 
     assert_eq!(body["success"], false);
-    assert_eq!(body["httpCode"], 500);
+    assert_eq!(body["statusCode"], 500);
     assert_eq!(body["code"], "INTERNAL_SERVER_ERROR");
 }
 

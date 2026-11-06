@@ -32,7 +32,7 @@ pub fn router() -> Router<AppState> {
             body = SuccessResponse<TopicReloadData>,
             example = json!({
                 "success": true,
-                "httpCode": 200,
+                "statusCode": 200,
                 "message": "Topics reloaded",
                 "data": {
                     "enabledTopics": 11,

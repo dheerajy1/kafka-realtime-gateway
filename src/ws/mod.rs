@@ -42,7 +42,7 @@ pub fn auth_error_frame(error: &ApiError) -> String {
     json!({
         "type": "error",
         "success": false,
-        "httpCode": error.code().http_code(),
+        "statusCode": error.code().status_code(),
         "code": error.code().as_str(),
         "message": error.message(),
         "error": error.error(),

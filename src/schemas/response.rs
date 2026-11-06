@@ -6,7 +6,7 @@ use utoipa::ToSchema;
 #[serde(rename_all = "camelCase")]
 pub struct SuccessResponse<T: Serialize> {
     pub success: bool,
-    pub http_code: u16,
+    pub status_code: u16,
     pub message: String,
     pub data: T,
 }
@@ -16,7 +16,7 @@ impl<T: Serialize> SuccessResponse<T> {
     pub fn ok(message: &str, data: T) -> Self {
         Self {
             success: true,
-            http_code: 200,
+            status_code: 200,
             message: message.to_string(),
             data,
         }
@@ -26,7 +26,7 @@ impl<T: Serialize> SuccessResponse<T> {
     pub fn accepted(message: &str, data: T) -> Self {
         Self {
             success: true,
-            http_code: 202,
+            status_code: 202,
             message: message.to_string(),
             data,
         }
@@ -38,7 +38,7 @@ impl<T: Serialize> SuccessResponse<T> {
 #[serde(rename_all = "camelCase")]
 pub struct ErrorResponse {
     pub success: bool,
-    pub http_code: u16,
+    pub status_code: u16,
     pub code: &'static str,
     pub message: String,
     pub error: String,

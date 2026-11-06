@@ -37,7 +37,7 @@ pub fn router() -> Router<AppState> {
             body = SuccessResponse<LoginData>,
             example = json!({
                 "success": true,
-                "httpCode": 200,
+                "statusCode": 200,
                 "message": "Login successful",
                 "data": {
                     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",

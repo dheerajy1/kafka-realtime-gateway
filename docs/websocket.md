@@ -24,7 +24,7 @@ A missing, empty or too long `x-subscriber-id` is answered with HTTP 400 before 
 The credentials are checked after the upgrade. If they fail, the server sends one error frame and closes with code 4001:
 
 ```json
-{ "type": "error", "success": false, "httpCode": 401, "code": "...", "message": "...", "error": "..." }
+{ "type": "error", "success": false, "statusCode": 401, "code": "...", "message": "...", "error": "..." }
 ```
 
 If they pass, the server sends a `ready` frame. `ws-subscribe` sends `{"type":"ready"}`. `ws-publish` sends `{"type":"ready","message":"WebSocket publish connection established"}`.

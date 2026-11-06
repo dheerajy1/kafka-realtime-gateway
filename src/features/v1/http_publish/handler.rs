@@ -38,7 +38,7 @@ pub fn router() -> Router<AppState> {
             body = SuccessResponse<HttpPublishData>,
             example = json!({
                 "success": true,
-                "httpCode": 202,
+                "statusCode": 202,
                 "message": "Event accepted",
                 "data": {
                     "topic": "orders",

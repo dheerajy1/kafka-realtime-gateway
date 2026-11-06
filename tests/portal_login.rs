@@ -51,7 +51,7 @@ async fn post_without_html_accept_returns_403_error_shape() {
     let body = body_json(response).await;
 
     assert_eq!(body["success"], false);
-    assert_eq!(body["httpCode"], 403);
+    assert_eq!(body["statusCode"], 403);
 }
 
 // An empty username returns 400 and the page with the input error toast

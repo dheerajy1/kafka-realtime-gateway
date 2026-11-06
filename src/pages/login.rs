@@ -55,7 +55,7 @@ fn login_html(status: StatusCode, error: Option<String>) -> Response {
 
 // Renders the login page for a failed login, server errors only show the safe catalogue message
 fn login_error(error: ApiError) -> Response {
-    let message = if error.code().http_code() >= 500 {
+    let message = if error.code().status_code() >= 500 {
         internal_server_error::SERVER_ERROR.message.to_string()
     } else {
         error.message().to_string()

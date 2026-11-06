@@ -37,7 +37,7 @@ pub fn router() -> Router<AppState> {
             body = SuccessResponse<CreateApiKeyData>,
             example = json!({
                 "success": true,
-                "httpCode": 200,
+                "statusCode": 200,
                 "message": "API key created successfully",
                 "data": {
                     "apiKeyId": "my-service-key",

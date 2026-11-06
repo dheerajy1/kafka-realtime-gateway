@@ -54,7 +54,7 @@ async fn reload_returns_the_summary() {
 
     let json = body_json(response).await;
     assert_eq!(json["success"], true);
-    assert_eq!(json["httpCode"], 200);
+    assert_eq!(json["statusCode"], 200);
     assert_eq!(json["message"], "Topics reloaded");
     assert_eq!(json["data"]["enabledTopics"], 11);
     assert_eq!(json["data"]["consumeTopics"], 7);

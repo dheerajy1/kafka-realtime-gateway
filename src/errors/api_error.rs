@@ -67,7 +67,7 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let body = ErrorResponse {
             success: false,
-            http_code: self.code.http_code(),
+            status_code: self.code.status_code(),
             code: self.code.as_str(),
             message: self.message,
             error: self.error,

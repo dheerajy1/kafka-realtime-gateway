@@ -112,7 +112,7 @@ fn build_error_responses(entries: &[CatalogEntry]) -> BTreeMap<String, RefOr<Res
 
     for entry in entries {
         grouped
-            .entry(entry.code.http_code())
+            .entry(entry.code.status_code())
             .or_default()
             .push(entry);
     }
@@ -125,7 +125,7 @@ fn build_error_responses(entries: &[CatalogEntry]) -> BTreeMap<String, RefOr<Res
                 let example = ExampleBuilder::new()
                     .value(Some(json!({
                         "success": false,
-                        "httpCode": entry.code.http_code(),
+                        "statusCode": entry.code.status_code(),
                         "code": entry.code.as_str(),
                         "message": entry.message,
                         "error": entry.error,

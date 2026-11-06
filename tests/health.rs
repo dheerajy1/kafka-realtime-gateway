@@ -13,7 +13,7 @@ async fn app_health_returns_200_with_valid_headers() {
     let body = body_json(response).await;
 
     assert_eq!(body["success"], true);
-    assert_eq!(body["httpCode"], 200);
+    assert_eq!(body["statusCode"], 200);
     assert_eq!(body["message"], "Application is running");
     assert_eq!(body["data"]["status"], "UP");
     assert!(body["data"]["uptimeMs"].is_u64());

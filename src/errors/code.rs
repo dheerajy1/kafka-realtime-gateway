@@ -53,7 +53,7 @@ impl ErrorCode {
     }
 
     // Numeric http status sent in the response body
-    pub fn http_code(self) -> u16 {
+    pub fn status_code(self) -> u16 {
         match self {
             Self::BadRequest => 400,
             Self::Unauthorized => 401,
@@ -80,7 +80,7 @@ impl ErrorCode {
 
     // Http status used on the response line
     pub fn status(self) -> StatusCode {
-        StatusCode::from_u16(self.http_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
+        StatusCode::from_u16(self.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
     }
 
     // Generic summary used when no specific catalogue entry is given
