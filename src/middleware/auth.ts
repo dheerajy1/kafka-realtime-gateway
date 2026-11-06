@@ -211,7 +211,7 @@ export const apiKeyAuth = new Elysia().use(NoAuth).macro("apiKey", {
 
       const authError: CtxAuthError = {
         code: null,
-        httpCode: null,
+        statusCode: null,
         message: null,
         error: null,
       };
@@ -237,7 +237,7 @@ export const apiKeyAuth = new Elysia().use(NoAuth).macro("apiKey", {
 
       const authError: CtxAuthError = {
         code: myErr.code,
-        httpCode: myErr.httpCode,
+        statusCode: myErr.statusCode,
         message: myErr.message,
         error: myErr.error,
       };
