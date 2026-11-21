@@ -758,7 +758,7 @@ This copy is for kafka-api-gateway-rust. The `Before` and `After` texts describe
 
 **After**: `.max_age(PREFLIGHT_MAX_AGE)` with `Duration::from_secs(3600)`. `tests/cors.rs` is new and has seven tests: a fixed origin, a suffix origin, an unknown origin, a request without an origin, a preflight from an allowed origin, a preflight from an unknown origin, and the `Access-Control-Max-Age` value `3600`.
 
-**Detail**: the `tower-http` source shows `max_age` takes anything that converts into `MaxAge`, and `Duration` does. The owner then added `x-api-key` and `x-api-secret` to `allow_headers`, which now lists `content-type`, `authorization`, `x-client-id`, `x-client-secret`, `x-api-key` and `x-api-secret`. Before that, a browser that called the API-key routes (`/api/v1/http-publish`) with those headers would have failed its preflight. Server-to-server callers were never affected. `tests/cors.rs` does not assert the two new names yet.
+**Detail**: the `tower-http` source shows `max_age` takes anything that converts into `MaxAge`, and `Duration` does. The owner then added `x-api-key` and `x-api-secret` to `allow_headers`, which now lists `content-type`, `authorization`, `x-client-id`, `x-client-secret`, `x-api-key` and `x-api-secret`. Before that, a browser that called the API-key routes (`/api/v1/http-publish`) with those headers would have failed its preflight. Server-to-server callers were never affected. `preflight_from_allowed_origin_succeeds` in `tests/cors.rs` also checks that both names are allowed.
 
 **Why**: every skipped preflight is one request fewer before the real call.
 

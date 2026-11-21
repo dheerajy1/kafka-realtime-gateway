@@ -113,6 +113,8 @@ async fn preflight_from_allowed_origin_succeeds() {
     assert!(headers.contains("content-type"));
     assert!(headers.contains("x-client-id"));
     assert!(headers.contains("x-client-secret"));
+    assert!(headers.contains("x-api-key"));
+    assert!(headers.contains("x-api-secret"));
 }
 
 // A preflight answer can be reused by the browser for one hour
