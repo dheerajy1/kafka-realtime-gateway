@@ -2,7 +2,9 @@ use std::env;
 use std::process::{Command, exit};
 
 use kafka_api_gateway::config::env::Env;
+use quiet::Show;
 
+mod quiet;
 mod ws_test;
 
 // Compose file, image and container names used by the docker tasks
@@ -12,7 +14,7 @@ const CONTAINER: &str = "kafka-api-gateway";
 
 fn main() {
     let task = env::args().nth(1).unwrap_or_else(|| {
-        eprintln!("Usage: cargo <css|dev|start|build-prod|hash|test-ws|docker-build|docker-up|docker-down|docker-start|docker-stop|docker-restart|docker-logs|docker-logs-clear|docker-rmi|docker-clean>");
+        eprintln!("Usage: cargo <css|dev|start|build-prod|hash|test-ws|verify|docker-build|docker-up|docker-down|docker-start|docker-stop|docker-restart|docker-logs|docker-logs-clear|docker-rmi|docker-clean>");
         exit(1);
     });
 
@@ -23,6 +25,7 @@ fn main() {
         "build" => run_build(),
         "hash" => run_hash(env::args().nth(2)),
         "test-ws" => run_test_ws(env::args().nth(2), env::args().nth(3), env::args().nth(4)),
+        "verify" => run_verify(),
         "docker-build" => {
             run_css();
             finish(compose(&["build"]))
@@ -72,6 +75,38 @@ fn run_css() {
     }
 }
 
+fn package_args(command: &str, package: &str, release: bool) -> Vec<String> {
+    let mut args = vec![
+        command.to_string(),
+        "--package".to_string(),
+        package.to_string(),
+    ];
+
+    if release {
+        args.push("--release".to_string());
+    }
+
+    args
+}
+
+fn run_step(args: &[String], show: Show) {
+    let mut cmd = Command::new("cargo");
+    cmd.args(args);
+
+    match quiet::run(&cmd, show) {
+        Ok(true) => {}
+        Ok(false) => exit(1),
+        Err(error) => {
+            eprintln!("Failed to run cargo: {error}");
+            exit(1);
+        }
+    }
+}
+
+fn build_quiet(args: &[String]) {
+    run_step(args, Show::All);
+}
+
 // Compiles Tailwind CSS, then runs the server, which inherits the variables loaded from the env file
 fn run_server(profile: &str, release: bool) {
     let env = load_env(profile);
@@ -84,12 +119,11 @@ fn run_server(profile: &str, release: bool) {
         if release { "production" } else { "development" }
     );
 
-    let mut cmd = Command::new("cargo");
-    cmd.args(["run", "--package", "kafka-api-gateway"]);
+    build_quiet(&package_args("build", "kafka-api-gateway", release));
 
-    if release {
-        cmd.arg("--release");
-    }
+    let mut cmd = Command::new("cargo");
+    cmd.args(package_args("run", "kafka-api-gateway", release));
+    cmd.arg("--quiet");
 
     // On Unix this process is replaced by the gateway, so Ctrl+C reaches only the gateway and the prompt returns after its shutdown finished
     #[cfg(unix)]
@@ -117,12 +151,44 @@ fn run_build() {
 
     run_css();
 
-    let status = Command::new("cargo")
-        .args(["build", "--release", "--package", "kafka-api-gateway"])
-        .status()
-        .expect("Failed to execute cargo build for kafka-api-gateway");
+    println!("-> Validated .env.production");
 
-    exit(status.code().unwrap_or(1));
+    build_quiet(&package_args("build", "kafka-api-gateway", true));
+}
+
+fn run_verify() {
+    let steps: [(&str, Vec<&str>, Show); 4] = [
+        ("cargo fmt", vec!["fmt"], Show::All),
+        (
+            "cargo check",
+            vec!["check", "--workspace", "--all-targets"],
+            Show::All,
+        ),
+        (
+            "cargo clippy",
+            vec![
+                "clippy",
+                "--workspace",
+                "--all-targets",
+                "--locked",
+                "--",
+                "-D",
+                "warnings",
+            ],
+            Show::All,
+        ),
+        ("cargo test", vec!["test", "--workspace"], Show::TestSummary),
+    ];
+
+    for (label, args, show) in steps {
+        println!("-> {label}");
+
+        let args: Vec<String> = args.into_iter().map(str::to_string).collect();
+
+        run_step(&args, show);
+    }
+
+    println!("-> verify passed");
 }
 
 // Prints the bcrypt hash (cost 12) of the given value

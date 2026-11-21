@@ -1,5 +1,5 @@
 [alias]
-xtask = "run --package xtask --"
+xtask = "run --quiet --package xtask --"
 css = "xtask css"
 dev = "xtask dev"
 start = "xtask start"
@@ -16,3 +16,4 @@ docker-logs = "xtask docker-logs"
 docker-logs-clear = "xtask docker-logs-clear"
 docker-rmi = "xtask docker-rmi"
 docker-clean = "xtask docker-clean"
+verify = "xtask verify"
