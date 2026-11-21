@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -7,27 +9,28 @@ use utoipa::ToSchema;
 pub struct SuccessResponse<T: Serialize> {
     pub success: bool,
     pub status_code: u16,
-    pub message: String,
+    // Fixed text written in the source, so it is borrowed and never copied
+    pub message: &'static str,
     pub data: T,
 }
 
 impl<T: Serialize> SuccessResponse<T> {
     // Builds a 200 OK envelope around the given data
-    pub fn ok(message: &str, data: T) -> Self {
+    pub fn ok(message: &'static str, data: T) -> Self {
         Self {
             success: true,
             status_code: 200,
-            message: message.to_string(),
+            message,
             data,
         }
     }
 
     // Builds a 202 Accepted envelope around the given data
-    pub fn accepted(message: &str, data: T) -> Self {
+    pub fn accepted(message: &'static str, data: T) -> Self {
         Self {
             success: true,
             status_code: 202,
-            message: message.to_string(),
+            message,
             data,
         }
     }
@@ -40,6 +43,8 @@ pub struct ErrorResponse {
     pub success: bool,
     pub status_code: u16,
     pub code: &'static str,
-    pub message: String,
-    pub error: String,
+
+    // Borrowed for the fixed catalogue text and owned for a text built at run time
+    pub message: Cow<'static, str>,
+    pub error: Cow<'static, str>,
 }

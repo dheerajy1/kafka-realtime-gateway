@@ -3,6 +3,7 @@ use std::{
     sync::{Mutex, MutexGuard, PoisonError},
 };
 
+use axum::extract::ws::Utf8Bytes;
 use tokio::sync::{mpsc, oneshot};
 
 // Frames a subscriber may have waiting before the gateway closes its connection
@@ -60,7 +61,8 @@ struct Session {
     subscriptions: HashSet<String>,
 
     // Queue of frames the connection task writes to the socket
-    tx: mpsc::Sender<String>,
+    // A frame is shared text, so a copy in this queue is a counter that goes up, not the text again
+    tx: mpsc::Sender<Utf8Bytes>,
 }
 
 // One message waiting for the ACK of its owner
@@ -123,7 +125,7 @@ impl SubscriberRegistry {
     }
 
     // Adds a connection, returns its id and the queue its task has to drain
-    pub fn register(&self, api_key_id: &str) -> (u64, mpsc::Receiver<String>) {
+    pub fn register(&self, api_key_id: &str) -> (u64, mpsc::Receiver<Utf8Bytes>) {
         let (tx, rx) = mpsc::channel(QUEUE_CAPACITY);
         let mut inner = self.lock();
 
@@ -192,8 +194,10 @@ impl SubscriberRegistry {
     }
 
     // Queues the frame for every subscriber of the topic
+    // The text is made once and every subscriber gets a share of it, so a fan-out to many subscribers copies nothing
     // A subscriber whose queue is full or whose connection is gone is removed, its task then closes the socket
-    pub fn deliver(&self, topic: &str, frame: &str) -> DeliveryReport {
+    pub fn deliver(&self, topic: &str, frame: impl Into<Utf8Bytes>) -> DeliveryReport {
+        let frame = frame.into();
         let mut inner = self.lock();
         let mut report = DeliveryReport::default();
 
@@ -202,7 +206,7 @@ impl SubscriberRegistry {
                 continue;
             }
 
-            match session.tx.try_send(frame.to_string()) {
+            match session.tx.try_send(frame.clone()) {
                 Ok(()) => report.delivered += 1,
                 Err(_) => report.removed.push(*id),
             }

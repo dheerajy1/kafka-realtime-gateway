@@ -54,7 +54,7 @@ pub async fn login(
     _auth: NoAuth,
     ValidJson(body): ValidJson<LoginRequest>,
 ) -> Result<Json<SuccessResponse<LoginData>>, ApiError> {
-    let data = service::login(state.users.as_ref(), &env().jwt_secret, &body).await?;
+    let data = service::login(state.users.as_ref(), &env().jwt_secret, body).await?;
 
     Ok(Json(SuccessResponse::ok("Login successful", data)))
 }

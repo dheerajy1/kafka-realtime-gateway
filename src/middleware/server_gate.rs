@@ -4,13 +4,9 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-use validator::Validate;
 
-use crate::{
-    config::env::env,
-    pages::render::wants_html,
-    schemas::auth::{CLIENT_ID_HEADER, CLIENT_SECRET_HEADER, NoAuthHeaders},
-};
+use super::no_auth::check_client_credentials;
+use crate::pages::render::wants_html;
 
 // Name of the portal login cookie
 pub const AUTH_COOKIE_NAME: &str = "auth";
@@ -38,23 +34,7 @@ fn is_websocket_upgrade(headers: &HeaderMap) -> bool {
 
 // True when the client id and secret headers are present, well formed and match the configured values
 fn has_valid_client_credentials(headers: &HeaderMap) -> bool {
-    let read = |name: &str| headers.get(name).and_then(|value| value.to_str().ok());
-
-    let (Some(client_id), Some(client_secret)) =
-        (read(CLIENT_ID_HEADER), read(CLIENT_SECRET_HEADER))
-    else {
-        return false;
-    };
-
-    let credentials = NoAuthHeaders::new(client_id, client_secret);
-
-    if credentials.validate().is_err() {
-        return false;
-    }
-
-    let env = env();
-
-    credentials.client_id == env.client_id && credentials.client_secret == env.client_secret
+    check_client_credentials(headers).is_ok()
 }
 
 // True when the Cookie header carries the portal login cookie
@@ -64,7 +44,7 @@ fn has_auth_cookie(headers: &HeaderMap) -> bool {
         .iter()
         .filter_map(|value| value.to_str().ok())
         .flat_map(|value| value.split(';'))
-        .any(|pair| pair.trim() == format!("{AUTH_COOKIE_NAME}={AUTH_COOKIE_VALUE}"))
+        .any(|pair| pair.trim().split_once('=') == Some((AUTH_COOKIE_NAME, AUTH_COOKIE_VALUE)))
 }
 
 // True when the path ends in a file extension like .css or .png
@@ -115,4 +95,95 @@ pub async fn server_gate(request: Request, next: Next) -> Response {
     }
 
     (StatusCode::FOUND, [(header::LOCATION, "/login")]).into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::http::HeaderValue;
+
+    use super::*;
+
+    // Builds a header map with one Cookie header
+    fn cookie(value: &'static str) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+
+        headers.insert(header::COOKIE, HeaderValue::from_static(value));
+
+        headers
+    }
+
+    // Builds a header map with one Upgrade header
+    fn upgrade(value: &'static str) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+
+        headers.insert(header::UPGRADE, HeaderValue::from_static(value));
+
+        headers
+    }
+
+    // The login cookie is found alone, next to other cookies and in a second Cookie header
+    #[test]
+    fn auth_cookie_is_found() {
+        assert!(has_auth_cookie(&cookie("auth=ok")));
+        assert!(has_auth_cookie(&cookie("theme=dark; auth=ok")));
+        assert!(has_auth_cookie(&cookie("auth=ok; theme=dark")));
+
+        let mut two = cookie("theme=dark");
+        two.append(header::COOKIE, HeaderValue::from_static("auth=ok"));
+
+        assert!(has_auth_cookie(&two));
+    }
+
+    // A wrong value, a longer name, a longer value or no cookie at all is not the login cookie
+    #[test]
+    fn other_cookies_are_not_the_auth_cookie() {
+        assert!(!has_auth_cookie(&cookie("auth=no")));
+        assert!(!has_auth_cookie(&cookie("xauth=ok")));
+        assert!(!has_auth_cookie(&cookie("auth=ok=more")));
+        assert!(!has_auth_cookie(&cookie("auth=")));
+        assert!(!has_auth_cookie(&cookie("auth")));
+        assert!(!has_auth_cookie(&HeaderMap::new()));
+    }
+
+    // The cookie the login sends is the cookie the gate looks for
+    #[test]
+    fn login_cookie_passes_the_gate_check() {
+        let set_cookie = auth_cookie_header();
+        let pair = set_cookie.split(';').next().unwrap_or_default();
+
+        assert_eq!(pair, "auth=ok");
+        assert!(set_cookie.contains("HttpOnly"));
+    }
+
+    // Paths that end in a file extension are static files
+    #[test]
+    fn file_extensions_are_found() {
+        assert!(has_file_extension("/global.css"));
+        assert!(has_file_extension("/public/logo.PNG"));
+        assert!(has_file_extension("/archive.tar.gz"));
+    }
+
+    // API paths, paths without a dot, an empty extension and a dot in a folder name are not files
+    #[test]
+    fn other_paths_are_not_files() {
+        assert!(!has_file_extension("/api/v1/health"));
+        assert!(!has_file_extension("/openapi"));
+        assert!(!has_file_extension("/file."));
+        assert!(!has_file_extension("/some.dir/file"));
+        assert!(!has_file_extension(""));
+    }
+
+    // An Upgrade header with the value websocket is found in any letter case
+    #[test]
+    fn websocket_upgrade_is_found() {
+        assert!(is_websocket_upgrade(&upgrade("websocket")));
+        assert!(is_websocket_upgrade(&upgrade("WebSocket")));
+    }
+
+    // Another Upgrade value or no header is not a WebSocket upgrade
+    #[test]
+    fn other_upgrades_are_not_websocket() {
+        assert!(!is_websocket_upgrade(&upgrade("h2c")));
+        assert!(!is_websocket_upgrade(&HeaderMap::new()));
+    }
 }

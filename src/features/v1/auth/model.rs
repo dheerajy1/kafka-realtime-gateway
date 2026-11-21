@@ -3,7 +3,8 @@ use utoipa::ToSchema;
 use validator::Validate;
 
 // Body of POST /api/v1/login
-#[derive(Debug, Deserialize, Validate, ToSchema)]
+// No Debug or Clone because it holds the password
+#[derive(Deserialize, Validate, ToSchema)]
 pub struct LoginRequest {
     // User name of the API user
     #[validate(length(min = 1, message = "\"username\" must not be empty"))]

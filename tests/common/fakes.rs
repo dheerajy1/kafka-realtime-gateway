@@ -43,13 +43,25 @@ pub struct FakeStore {
     portal_users: HashMap<String, String>,
 
     // Active API users by user name
-    api_users: HashMap<String, ApiUserRecord>,
+    api_users: HashMap<String, FakeApiUser>,
 
     // API keys by key id, behind a mutex because create_api_key adds to it
-    api_keys: Mutex<HashMap<String, ApiKeyRecord>>,
+    api_keys: Mutex<HashMap<String, FakeApiKey>>,
 
     // Topic policy rows, disabled ones included
     topics: Vec<TopicRow>,
+}
+
+// What the fake keeps about an API user, the record is built from it on every lookup because the record cannot be cloned
+struct FakeApiUser {
+    password_hash: String,
+    role: String,
+}
+
+// What the fake keeps about an API key, the record is built from it on every lookup because the record cannot be cloned
+struct FakeApiKey {
+    api_user_id: i32,
+    secret_hash: String,
 }
 
 impl FakeStore {
@@ -81,10 +93,9 @@ impl FakeStore {
         let hash = bcrypt::hash(password, FAKE_BCRYPT_COST).unwrap();
         self.api_users.insert(
             username.to_string(),
-            ApiUserRecord {
-                user_name: username.to_string(),
+            FakeApiUser {
                 password_hash: hash,
-                user_role: role.to_string(),
+                role: role.to_string(),
             },
         );
         self
@@ -95,10 +106,9 @@ impl FakeStore {
         let hash = bcrypt::hash(secret, FAKE_BCRYPT_COST).unwrap();
         self.api_keys.lock().unwrap().insert(
             api_key_id.to_string(),
-            ApiKeyRecord {
-                api_key_id: api_key_id.to_string(),
+            FakeApiKey {
                 api_user_id: 1,
-                api_key_secret_hash: hash,
+                secret_hash: hash,
             },
         );
         self
@@ -154,7 +164,11 @@ impl UserStore for FakeStore {
             return Err(Self::broken_error());
         }
 
-        Ok(self.api_users.get(username).cloned())
+        Ok(self.api_users.get(username).map(|user| ApiUserRecord {
+            user_name: username.to_string(),
+            password_hash: user.password_hash.clone(),
+            user_role: user.role.clone(),
+        }))
     }
 }
 
@@ -165,7 +179,11 @@ impl ApiKeyStore for FakeStore {
             .lock()
             .unwrap()
             .get(api_key_id)
-            .cloned()
+            .map(|key| ApiKeyRecord {
+                api_key_id: api_key_id.to_string(),
+                api_user_id: key.api_user_id,
+                api_key_secret_hash: key.secret_hash.clone(),
+            })
             .ok_or_else(|| ApiError::from_entry(unauthorized::INVALID_API_KEY))
     }
 
@@ -184,10 +202,9 @@ impl ApiKeyStore for FakeStore {
 
         keys.insert(
             api_key_id.to_string(),
-            ApiKeyRecord {
-                api_key_id: api_key_id.to_string(),
+            FakeApiKey {
                 api_user_id: 1,
-                api_key_secret_hash: api_key_secret_hash.to_string(),
+                secret_hash: api_key_secret_hash.to_string(),
             },
         );
 

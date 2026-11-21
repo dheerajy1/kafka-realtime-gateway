@@ -42,7 +42,7 @@ async fn healthz(State(state): State<AppState>, headers: HeaderMap) -> Response 
         return render_with_props(
             Healthz,
             HealthzProps {
-                title: "Health Check | Kafka realtime gateway".to_string(),
+                title: "Health Check | Kafka realtime gateway",
                 app,
                 db,
                 kafka,
@@ -66,7 +66,7 @@ async fn healthz_app(headers: HeaderMap) -> Response {
         return render_with_props(
             HealthzApp,
             HealthzAppProps {
-                title: "App Health | Kafka realtime gateway".to_string(),
+                title: "App Health | Kafka realtime gateway",
                 data,
             },
         )
@@ -84,7 +84,7 @@ async fn healthz_db(State(state): State<AppState>, headers: HeaderMap) -> Respon
         return render_with_props(
             HealthzDb,
             HealthzDbProps {
-                title: "DB Health | Kafka realtime gateway".to_string(),
+                title: "DB Health | Kafka realtime gateway",
                 data,
             },
         )
@@ -108,7 +108,7 @@ async fn healthz_kafka(State(state): State<AppState>, headers: HeaderMap) -> Res
         return render_with_props(
             HealthzKafka,
             HealthzKafkaProps {
-                title: "Kafka Health | Kafka realtime gateway".to_string(),
+                title: "Kafka Health | Kafka realtime gateway",
                 data,
             },
         )

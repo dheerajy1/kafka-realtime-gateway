@@ -1,7 +1,7 @@
 mod common;
 
-use axum::http::StatusCode;
-use common::{app, auth_headers, get_to, header_value};
+use axum::http::{StatusCode, header};
+use common::{TEST_CLIENT_ID, app, auth_headers, get_to, header_value};
 
 // Header a browser sends when it asks for a page
 const BROWSER: (&str, &str) = ("accept", "text/html");
@@ -78,6 +78,21 @@ async fn static_assets_need_no_cookie() {
     }
 }
 
+// Static files tell browsers to reuse them for one hour
+#[tokio::test]
+async fn static_files_are_cacheable_for_one_hour() {
+    for path in ["/global.css", "/logo.png", "/favicon.ico"] {
+        let response = get_to(app(), path, &[BROWSER]).await;
+
+        assert_eq!(response.status(), StatusCode::OK, "path {path}");
+        assert_eq!(
+            header_value(&response, header::CACHE_CONTROL.as_str()).as_deref(),
+            Some("public, max-age=3600"),
+            "path {path}"
+        );
+    }
+}
+
 // Callers that are not browsers and send valid client credentials pass without a cookie
 #[tokio::test]
 async fn valid_client_credentials_pass_the_gate() {
@@ -108,7 +123,10 @@ async fn wrong_client_credentials_are_redirected_on_pages() {
     let response = get_to(
         app(),
         "/healthz/app",
-        &[("x-client-id", "test-client"), ("x-client-secret", "wrong")],
+        &[
+            ("x-client-id", TEST_CLIENT_ID),
+            ("x-client-secret", "wrong"),
+        ],
     )
     .await;
 

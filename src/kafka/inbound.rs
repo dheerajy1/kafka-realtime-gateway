@@ -1,5 +1,8 @@
+use serde::{Serialize, Serializer, ser::SerializeMap};
 use serde_json::{Map, Value};
 use uuid::Uuid;
+
+use crate::ws::frames::AsText;
 
 // The UUID version a correlation id must have
 const CORRELATION_ID_VERSION: usize = 7;
@@ -51,6 +54,69 @@ pub fn parse_inbound(value: Option<&[u8]>) -> Inbound {
     }
 }
 
+// The event frame sent to subscribers
+// The fixed fields and the headers are borrowed and the payload was moved in, so serde writes the text once and nothing is copied into a map first
+struct EventFrame<'a> {
+    topic: &'a str,
+    partition: i32,
+    offset: i64,
+    headers: &'a [(String, String)],
+    payload: Map<String, Value>,
+}
+
+impl Serialize for EventFrame<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut map = serializer.serialize_map(None)?;
+
+        // The payload fields come last and win, so a fixed field the payload also has is left out
+        let fixed = |name: &str| !self.payload.contains_key(name);
+
+        if fixed("type") {
+            map.serialize_entry("type", "event")?;
+        }
+
+        if fixed("topic") {
+            map.serialize_entry("topic", self.topic)?;
+        }
+
+        if fixed("partition") {
+            map.serialize_entry("partition", &self.partition)?;
+        }
+
+        // The offset is text because a 64 bit number can lose digits in JavaScript
+        if fixed("offset") {
+            map.serialize_entry("offset", &AsText(self.offset))?;
+        }
+
+        if fixed("headers") {
+            map.serialize_entry("headers", &Headers(self.headers))?;
+        }
+
+        for (name, value) in &self.payload {
+            map.serialize_entry(name, value)?;
+        }
+
+        map.end()
+    }
+}
+
+// The Kafka headers as one JSON object, the last value of a repeated name wins
+struct Headers<'a>(&'a [(String, String)]);
+
+impl Serialize for Headers<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_map(
+            self.0
+                .iter()
+                .enumerate()
+                .filter(|(index, (name, _))| {
+                    !self.0[index + 1..].iter().any(|(later, _)| later == name)
+                })
+                .map(|(_, (name, value))| (name.as_str(), value.as_str())),
+        )
+    }
+}
+
 // Builds the event frame sent to subscribers, the payload fields come last and win over the fixed ones like the old gateway
 pub fn event_frame(
     topic: &str,
@@ -59,18 +125,14 @@ pub fn event_frame(
     headers: &[(String, String)],
     payload: Map<String, Value>,
 ) -> String {
-    let headers: Map<String, Value> = headers
-        .iter()
-        .map(|(name, value)| (name.clone(), Value::String(value.clone())))
-        .collect();
+    let frame = EventFrame {
+        topic,
+        partition,
+        offset,
+        headers,
+        payload,
+    };
 
-    let mut frame = Map::new();
-    frame.insert("type".to_string(), Value::from("event"));
-    frame.insert("topic".to_string(), Value::from(topic));
-    frame.insert("partition".to_string(), Value::from(partition));
-    frame.insert("offset".to_string(), Value::from(offset.to_string()));
-    frame.insert("headers".to_string(), Value::Object(headers));
-    frame.extend(payload);
-
-    Value::Object(frame).to_string()
+    // The fields are plain text and numbers, so serializing cannot fail
+    serde_json::to_string(&frame).expect("an event frame always serializes")
 }

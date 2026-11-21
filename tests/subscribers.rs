@@ -95,6 +95,25 @@ async fn deliver_reaches_only_subscribers_of_the_topic() {
     assert!(rx_c.try_recv().is_err());
 }
 
+// Every subscriber gets a share of the same text, the frame is not copied per subscriber
+#[tokio::test]
+async fn deliver_shares_one_buffer_between_subscribers() {
+    let registry = SubscriberRegistry::new();
+    let (a, mut rx_a) = registry.register("key-a");
+    let (b, mut rx_b) = registry.register("key-b");
+    registry.subscribe(a, "orders");
+    registry.subscribe(b, "orders");
+
+    registry.deliver("orders", "a frame that is shared".to_string());
+
+    let first = rx_a.recv().await.unwrap();
+    let second = rx_b.recv().await.unwrap();
+
+    assert_eq!(first.as_str(), "a frame that is shared");
+    assert_eq!(first, second);
+    assert_eq!(first.as_str().as_ptr(), second.as_str().as_ptr());
+}
+
 // A topic with no subscribers delivers to nobody
 #[tokio::test]
 async fn deliver_without_subscribers_delivers_zero() {

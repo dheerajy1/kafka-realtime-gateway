@@ -1,7 +1,7 @@
 mod common;
 
 use axum::http::StatusCode;
-use common::{auth_headers, body_json, body_text, get};
+use common::{TEST_CLIENT_ID, auth_headers, body_json, body_text, get};
 
 // GET /api/v1/health/app with valid headers returns the app health envelope
 #[tokio::test]
@@ -38,7 +38,10 @@ async fn app_health_returns_401_without_headers() {
 async fn app_health_returns_400_with_wrong_secret() {
     let response = get(
         "/api/v1/health/app",
-        &[("x-client-id", "test-client"), ("x-client-secret", "wrong")],
+        &[
+            ("x-client-id", TEST_CLIENT_ID),
+            ("x-client-secret", "wrong"),
+        ],
     )
     .await;
 

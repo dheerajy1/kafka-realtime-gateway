@@ -1,7 +1,8 @@
 use std::env;
-use std::process::{Command, exit};
+use std::ffi::OsStr;
+use std::process::{Command, ExitStatus, exit};
 
-use kafka_api_gateway::config::env::Env;
+use kafka_env::EnvSchema as Env;
 use quiet::Show;
 
 mod quiet;
@@ -12,9 +13,17 @@ const COMPOSE_FILE: &str = "docker/docker-compose.yml";
 const IMAGE: &str = "kafka-api-gateway:latest";
 const CONTAINER: &str = "kafka-api-gateway";
 
+// The one package the build and run tasks work on
+const PACKAGE: &str = "kafka-api-gateway";
+
+// bcrypt cost of `cargo hash`, the same as BCRYPT_COST in the gateway (src/auth/password.rs)
+const BCRYPT_COST: u32 = 12;
+
 fn main() {
     let task = env::args().nth(1).unwrap_or_else(|| {
-        eprintln!("Usage: cargo <css|dev|start|build-prod|hash|test-ws|verify|docker-build|docker-up|docker-down|docker-start|docker-stop|docker-restart|docker-logs|docker-logs-clear|docker-rmi|docker-clean>");
+        eprintln!(
+            "Usage: cargo <css|dev|start|preview|build-prod|build-preview|hash|test-ws|verify|docker-build|docker-up|docker-down|docker-start|docker-stop|docker-restart|docker-logs|docker-logs-clear|docker-rmi|docker-clean>"
+        );
         exit(1);
     });
 
@@ -22,7 +31,9 @@ fn main() {
         "css" => run_css(),
         "dev" => run_server("development", false),
         "start" => run_server("production", true),
-        "build" => run_build(),
+        "preview" => run_server("preview", true),
+        "build" => run_build("production"),
+        "build-preview" => run_build("preview"),
         "hash" => run_hash(env::args().nth(2)),
         "test-ws" => run_test_ws(env::args().nth(2), env::args().nth(3), env::args().nth(4)),
         "verify" => run_verify(),
@@ -50,12 +61,27 @@ fn main() {
     }
 }
 
+// Exits with the exit code of a finished command, or 1 when a signal ended it
+fn exit_with(status: ExitStatus) -> ! {
+    exit(status.code().unwrap_or(1))
+}
+
+// Runs a command and returns its exit status, or exits with a clear message when it cannot start
+fn status_or_exit(command: &mut Command, failure: &str) -> ExitStatus {
+    command.status().unwrap_or_else(|error| {
+        eprintln!("{failure}: {error}");
+        exit(1);
+    })
+}
+
 // Loads the env file for the profile into the process env, then validates it against the schema
 fn load_env(profile: &str) -> Env {
     let env_file = format!(".env.{profile}");
 
-    dotenvy::from_filename(&env_file)
-        .unwrap_or_else(|_| panic!("Failed to load environment file: {env_file}"));
+    dotenvy::from_filename(&env_file).unwrap_or_else(|error| {
+        eprintln!("Failed to load environment file {env_file}: {error}");
+        exit(1);
+    });
 
     Env::load().unwrap_or_else(|error| {
         eprintln!("[env] Validation failed for {env_file}: {error}");
@@ -65,35 +91,33 @@ fn load_env(profile: &str) -> Env {
 
 // Compiles src/tailwind.css into public/global.css with the standalone Tailwind CLI
 fn run_css() {
-    let status = Command::new("tailwindcss")
-        .args(["-i", "./src/tailwind.css", "-o", "./public/global.css"])
-        .status()
-        .expect("Failed to execute tailwindcss, is it installed and on PATH?");
+    let status = status_or_exit(
+        Command::new("tailwindcss").args(["-i", "./src/tailwind.css", "-o", "./public/global.css"]),
+        "Failed to execute tailwindcss, is it installed and on PATH?",
+    );
 
     if !status.success() {
-        exit(status.code().unwrap_or(1));
+        exit_with(status);
     }
 }
 
-fn package_args(command: &str, package: &str, release: bool) -> Vec<String> {
-    let mut args = vec![
-        command.to_string(),
-        "--package".to_string(),
-        package.to_string(),
-    ];
-
-    if release {
-        args.push("--release".to_string());
-    }
-
-    args
+// Cargo arguments for the gateway package, with the release flag added only when asked
+fn package_args(command: &str, release: bool) -> impl Iterator<Item = &str> {
+    [command, "--package", PACKAGE]
+        .into_iter()
+        .chain(release.then_some("--release"))
 }
 
-fn run_step(args: &[String], show: Show) {
+// Runs one cargo command quietly, exits with code 1 when it fails
+fn run_step<I, S>(args: I, show: Show)
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
     let mut cmd = Command::new("cargo");
     cmd.args(args);
 
-    match quiet::run(&cmd, show) {
+    match quiet::run(cmd, show) {
         Ok(true) => {}
         Ok(false) => exit(1),
         Err(error) => {
@@ -103,12 +127,8 @@ fn run_step(args: &[String], show: Show) {
     }
 }
 
-fn build_quiet(args: &[String]) {
-    run_step(args, Show::All);
-}
-
-// Compiles Tailwind CSS, then runs the server, which inherits the variables loaded from the env file
-fn run_server(profile: &str, release: bool) {
+// Compiles Tailwind CSS, builds the gateway quietly, then runs it with the variables loaded from the env file
+fn run_server(profile: &str, release: bool) -> ! {
     let env = load_env(profile);
 
     run_css();
@@ -116,14 +136,15 @@ fn run_server(profile: &str, release: bool) {
     println!(
         "-> Loaded .env.{profile} (Port: {}, Mode: {})",
         env.app_port,
-        if release { "production" } else { "development" }
+        env.app_env.as_str()
     );
 
-    build_quiet(&package_args("build", "kafka-api-gateway", release));
+    run_step(package_args("build", release), Show::All);
 
     let mut cmd = Command::new("cargo");
-    cmd.args(package_args("run", "kafka-api-gateway", release));
+    cmd.args(package_args("run", release));
     cmd.arg("--quiet");
+    quiet::clean_cargo_env(&mut cmd);
 
     // On Unix this process is replaced by the gateway, so Ctrl+C reaches only the gateway and the prompt returns after its shutdown finished
     #[cfg(unix)]
@@ -131,42 +152,41 @@ fn run_server(profile: &str, release: bool) {
         use std::os::unix::process::CommandExt;
 
         let error = cmd.exec();
-        eprintln!("Failed to execute cargo run for kafka-api-gateway: {error}");
+        eprintln!("Failed to execute cargo run for {PACKAGE}: {error}");
         exit(1);
     }
 
     #[cfg(not(unix))]
     {
-        let status = cmd
-            .status()
-            .expect("Failed to execute cargo run for kafka-api-gateway");
+        let status = status_or_exit(&mut cmd, "Failed to execute cargo run");
 
-        exit(status.code().unwrap_or(1));
+        exit_with(status)
     }
 }
 
-// Validates the production env, compiles Tailwind CSS, then builds in release mode
-fn run_build() {
-    load_env("production");
+// Validates the env file of the profile, compiles Tailwind CSS, then builds in release mode
+fn run_build(profile: &str) {
+    load_env(profile);
 
     run_css();
 
-    println!("-> Validated .env.production");
+    println!("-> Validated .env.{profile}");
 
-    build_quiet(&package_args("build", "kafka-api-gateway", true));
+    run_step(package_args("build", true), Show::All);
 }
 
+// Runs fmt, check, clippy and test in order and stops at the first failure
 fn run_verify() {
-    let steps: [(&str, Vec<&str>, Show); 4] = [
-        ("cargo fmt", vec!["fmt"], Show::All),
+    let steps: [(&str, &[&str], Show); 4] = [
+        ("cargo fmt", &["fmt"], Show::All),
         (
             "cargo check",
-            vec!["check", "--workspace", "--all-targets"],
+            &["check", "--workspace", "--all-targets"],
             Show::All,
         ),
         (
             "cargo clippy",
-            vec![
+            &[
                 "clippy",
                 "--workspace",
                 "--all-targets",
@@ -177,28 +197,26 @@ fn run_verify() {
             ],
             Show::All,
         ),
-        ("cargo test", vec!["test", "--workspace"], Show::TestSummary),
+        ("cargo test", &["test", "--workspace"], Show::TestSummary),
     ];
 
     for (label, args, show) in steps {
         println!("-> {label}");
 
-        let args: Vec<String> = args.into_iter().map(str::to_string).collect();
-
-        run_step(&args, show);
+        run_step(args, show);
     }
 
     println!("-> verify passed");
 }
 
-// Prints the bcrypt hash (cost 12) of the given value
+// Prints the bcrypt hash of the given value
 fn run_hash(value: Option<String>) {
     let value = value.unwrap_or_else(|| {
         eprintln!("Usage: cargo hash 'value'");
         exit(1);
     });
 
-    match bcrypt::hash(&value, 12) {
+    match bcrypt::hash(&value, BCRYPT_COST) {
         Ok(hash) => println!("{hash}"),
         Err(error) => {
             eprintln!("Failed to hash the value: {error}");
@@ -216,10 +234,11 @@ fn run_test_ws(api_key: Option<String>, api_secret: Option<String>, mode: Option
 
     let env = load_env("development");
 
+    // The env is not used after this, so its texts move into the arguments
     let args = ws_test::Args {
         base: format!("localhost:{}", env.app_port),
-        client_id: env.client_id.clone(),
-        client_secret: env.client_secret.clone(),
+        client_id: env.client_id,
+        client_secret: env.client_secret,
         api_key,
         api_secret,
     };
@@ -239,19 +258,22 @@ fn finish(ok: bool) -> ! {
 
 // Runs a docker command and returns whether it succeeded
 fn docker(args: &[&str]) -> bool {
-    Command::new("docker")
-        .args(args)
-        .status()
-        .expect("Failed to execute docker, is it installed and on PATH?")
-        .success()
+    status_or_exit(
+        Command::new("docker").args(args),
+        "Failed to execute docker, is it installed and on PATH?",
+    )
+    .success()
 }
 
 // Runs docker compose against the compose file and returns whether it succeeded
 fn compose(args: &[&str]) -> bool {
-    let mut full = vec!["compose", "-f", COMPOSE_FILE];
-    full.extend_from_slice(args);
-
-    docker(&full)
+    status_or_exit(
+        Command::new("docker")
+            .args(["compose", "-f", COMPOSE_FILE])
+            .args(args),
+        "Failed to execute docker compose, is Docker installed?",
+    )
+    .success()
 }
 
 // Empties the container log file, which usually needs sudo on Linux
@@ -259,19 +281,23 @@ fn run_docker_logs_clear() -> ! {
     let output = Command::new("docker")
         .args(["inspect", "--format", "{{.LogPath}}", CONTAINER])
         .output()
-        .expect("Failed to execute docker inspect");
+        .unwrap_or_else(|error| {
+            eprintln!("Failed to execute docker inspect: {error}");
+            exit(1);
+        });
 
-    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let path = String::from_utf8_lossy(&output.stdout);
+    let path = path.trim();
 
     if !output.status.success() || path.is_empty() {
         eprintln!("Could not find the log file of the container {CONTAINER}, is it created?");
         exit(1);
     }
 
-    let status = Command::new("sudo")
-        .args(["truncate", "-s", "0", &path])
-        .status()
-        .expect("Failed to execute sudo truncate");
+    let status = status_or_exit(
+        Command::new("sudo").args(["truncate", "-s", "0", path]),
+        "Failed to execute sudo truncate",
+    );
 
-    finish(status.success())
+    exit_with(status)
 }

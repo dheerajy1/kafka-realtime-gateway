@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use dioxus::prelude::*;
 
 use crate::components::icons::{Lock, User};
@@ -5,19 +7,19 @@ use crate::components::layout::Layout;
 
 #[derive(Props, Clone, PartialEq)]
 pub struct LoginProps {
-    pub title: String,
+    pub title: &'static str,
 
     // Error shown as a toast above the form, None when the page is opened normally
-    pub error: Option<String>,
+    pub error: Option<Cow<'static, str>>,
 }
 
 // Login page rendered inside the shared Layout
 #[component]
 pub fn Login(props: LoginProps) -> Element {
     rsx! {
-        Layout { title: props.title.clone(),
+        Layout { title: props.title,
             // CSS-only toast, the animate-toast animation hides it by itself after about 6 seconds
-            if let Some(message) = props.error.clone() {
+            if let Some(message) = props.error.as_deref() {
                 div {
                     role: "alert",
                     class: "fixed top-4 right-4 z-50 max-w-sm border border-error bg-surface px-4 py-3 text-sm text-error animate-toast",

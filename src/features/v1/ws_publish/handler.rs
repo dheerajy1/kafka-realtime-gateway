@@ -15,8 +15,8 @@ use super::session::PublishSession;
 use crate::{
     state::AppState,
     ws::{
-        CLOSE_AUTH_FAILED, CLOSE_GOING_AWAY, Exit, MAX_MESSAGE_SIZE, auth_error_frame,
-        authenticate, close, error_frame, frame,
+        CLOSE_AUTH_FAILED, CLOSE_GOING_AWAY, Exit, MAX_MESSAGE_SIZE, authenticate, close,
+        frames::{Frame, auth_error_frame, error_frame},
         keepalive::{Beat, Keepalive, PING_INTERVAL},
     },
 };
@@ -104,10 +104,10 @@ async fn serve(
     session: &PublishSession,
     mut shutdown: watch::Receiver<bool>,
 ) -> Exit {
-    let ready = frame(serde_json::json!({
-        "type": "ready",
-        "message": "WebSocket publish connection established",
-    }));
+    let ready = Frame::Ready {
+        message: Some("WebSocket publish connection established"),
+    }
+    .to_text();
     if socket.send(Message::Text(ready.into())).await.is_err() {
         return Exit::Gone;
     }

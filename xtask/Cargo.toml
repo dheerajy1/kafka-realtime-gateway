@@ -5,8 +5,8 @@ edition = "2024"
 publish = false
 
 [dependencies]
-kafka-api-gateway = { path = ".." }
+kafka-env = { workspace = true }
 dotenvy = "0.15"
-bcrypt = "0.19"
+bcrypt = { workspace = true }
 tungstenite = "0.29"
-serde_json = "1.0.154"
+serde_json = { workspace = true }

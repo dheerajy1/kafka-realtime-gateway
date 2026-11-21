@@ -1,7 +1,7 @@
 mod common;
 
 use axum::{Router, body::Body, http::Request, http::StatusCode};
-use common::{auth_headers, body_json, body_text, get, post};
+use common::{TEST_CLIENT_ID, TEST_CLIENT_SECRET, auth_headers, body_json, body_text, get, post};
 use kafka_api_gateway::errors::panic::handle_panic;
 use tower::ServiceExt;
 use tower_http::catch_panic::CatchPanicLayer;
@@ -71,7 +71,7 @@ async fn panic_returns_500_error_shape_without_panic_text() {
 async fn empty_client_id_returns_400() {
     let response = get(
         "/api/v1/health/app",
-        &[("x-client-id", ""), ("x-client-secret", "test-secret")],
+        &[("x-client-id", ""), ("x-client-secret", TEST_CLIENT_SECRET)],
     )
     .await;
 
@@ -91,7 +91,7 @@ async fn too_long_client_id_returns_400() {
         "/api/v1/health/app",
         &[
             ("x-client-id", long_id.as_str()),
-            ("x-client-secret", "test-secret"),
+            ("x-client-secret", TEST_CLIENT_SECRET),
         ],
     )
     .await;
@@ -107,7 +107,7 @@ async fn too_long_client_secret_returns_400() {
     let response = get(
         "/api/v1/health/app",
         &[
-            ("x-client-id", "test-client"),
+            ("x-client-id", TEST_CLIENT_ID),
             ("x-client-secret", long_secret.as_str()),
         ],
     )

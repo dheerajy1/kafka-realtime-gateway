@@ -11,7 +11,7 @@ use crate::kafka::{
 
 #[derive(Props, Clone, PartialEq)]
 pub struct HealthzKafkaProps {
-    pub title: String,
+    pub title: &'static str,
     pub data: KafkaHealthFull,
 }
 
@@ -74,27 +74,27 @@ pub fn HealthzKafka(props: HealthzKafkaProps) -> Element {
         .unwrap_or_else(|| "none".to_string());
 
     rsx! {
-        Layout { title: props.title.clone(),
+        Layout { title: props.title,
             div { class: "max-w-(--width-health) mx-auto mt-8 space-y-6",
                 h1 { class: "text-2xl font-bold text-text-primary", "Kafka Health" }
 
                 div { class: "bg-surface border border-border-thick p-4 md:p-5 rounded-lg",
                     h2 { class: "text-lg font-semibold mb-3 text-text-primary", "Broker" }
-                    Row { label: "Status".to_string(),
+                    Row { label: "Status",
                         KafkaStatusValue { status: data.status }
                     }
-                    Row { label: "Latency (ms)".to_string(), "{format_latency(data.latency_ms)}" }
-                    Row { label: "Checked at (UTC)".to_string(), "{data.checked_at}" }
+                    Row { label: "Latency (ms)", "{format_latency(data.latency_ms)}" }
+                    Row { label: "Checked at (UTC)", "{data.checked_at}" }
                     if let Some(error) = &data.error {
-                        Row { label: "Error".to_string(), "{error}" }
+                        Row { label: "Error", "{error}" }
                     }
                 }
 
                 if let Some(cluster) = &data.cluster {
                     div { class: "bg-surface border border-border-thick p-4 md:p-5 rounded-lg",
                         h2 { class: "text-lg font-semibold mb-3 text-text-primary", "Cluster" }
-                        Row { label: "Cluster id".to_string(), "{cluster.cluster_id}" }
-                        Row { label: "Controller".to_string(), "{cluster.controller_id}" }
+                        Row { label: "Cluster id", "{cluster.cluster_id}" }
+                        Row { label: "Controller", "{cluster.controller_id}" }
                         for broker in cluster.brokers.iter() {
                             Row { label: format!("Broker {}", broker.id), "{broker_line(broker)}" }
                         }
@@ -103,12 +103,12 @@ pub fn HealthzKafka(props: HealthzKafkaProps) -> Element {
 
                 div { class: "bg-surface border border-border-thick p-4 md:p-5 rounded-lg",
                     h2 { class: "text-lg font-semibold mb-3 text-text-primary", "Gateway" }
-                    Row { label: "Producer last publish".to_string(), "{producer_line(&gateway.producer)}" }
-                    Row { label: "Consumer running".to_string(), "{running}" }
-                    Row { label: "Consumer last poll".to_string(), "{format_ago(gateway.consumer.last_poll_ago_ms)}" }
-                    Row { label: "Consumer last error".to_string(), "{last_error}" }
-                    Row { label: "Consumed topics".to_string(), "{gateway.consumed_topics}" }
-                    Row { label: "Connected subscribers".to_string(), "{gateway.connected_subscribers}" }
+                    Row { label: "Producer last publish", "{producer_line(&gateway.producer)}" }
+                    Row { label: "Consumer running", "{running}" }
+                    Row { label: "Consumer last poll", "{format_ago(gateway.consumer.last_poll_ago_ms)}" }
+                    Row { label: "Consumer last error", "{last_error}" }
+                    Row { label: "Consumed topics", "{gateway.consumed_topics}" }
+                    Row { label: "Connected subscribers", "{gateway.connected_subscribers}" }
                 }
 
                 if let Some(topics) = &data.topics {
@@ -123,9 +123,9 @@ pub fn HealthzKafka(props: HealthzKafkaProps) -> Element {
                 if let Some(group) = &data.consumer_group {
                     div { class: "bg-surface border border-border-thick p-4 md:p-5 rounded-lg",
                         h2 { class: "text-lg font-semibold mb-3 text-text-primary", "Consumer group" }
-                        Row { label: "Group id".to_string(), "{group.group_id}" }
-                        Row { label: "State".to_string(), "{group.state}" }
-                        Row { label: "Members".to_string(), "{group.members}" }
+                        Row { label: "Group id", "{group.group_id}" }
+                        Row { label: "State", "{group.state}" }
+                        Row { label: "Members", "{group.members}" }
                     }
                 }
 
@@ -144,7 +144,7 @@ pub fn HealthzKafka(props: HealthzKafkaProps) -> Element {
                     div { class: "bg-surface border border-border-thick p-4 md:p-5 rounded-lg",
                         h2 { class: "text-lg font-semibold mb-3 text-text-primary", "Warnings" }
                         for warning in data.warnings.iter() {
-                            Row { label: "Warning".to_string(), "{warning}" }
+                            Row { label: "Warning", "{warning}" }
                         }
                     }
                 }

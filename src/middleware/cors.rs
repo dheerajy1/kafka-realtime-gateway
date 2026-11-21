@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use axum::http::{HeaderName, HeaderValue, Method, header};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
@@ -24,6 +26,9 @@ fn is_allowed_origin(origin: &HeaderValue) -> bool {
             .any(|suffix| origin.ends_with(suffix))
 }
 
+// How long a browser may reuse a preflight answer, so it does not ask again before every call
+const PREFLIGHT_MAX_AGE: Duration = Duration::from_secs(3600);
+
 // Builds the CORS layer, requests without an Origin header are untouched
 pub fn cors_layer() -> CorsLayer {
     CorsLayer::new()
@@ -31,11 +36,14 @@ pub fn cors_layer() -> CorsLayer {
             is_allowed_origin(origin)
         }))
         .allow_credentials(true)
+        .max_age(PREFLIGHT_MAX_AGE)
         .allow_headers([
             header::CONTENT_TYPE,
             header::AUTHORIZATION,
             HeaderName::from_static("x-client-id"),
             HeaderName::from_static("x-client-secret"),
+            HeaderName::from_static("x-api-key"),
+            HeaderName::from_static("x-api-secret"),
         ])
         .allow_methods([
             Method::GET,

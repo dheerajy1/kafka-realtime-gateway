@@ -2,6 +2,7 @@ mod common;
 
 use std::sync::Arc;
 
+use axum::extract::ws::Utf8Bytes;
 use common::fakes::FakePublisher;
 use kafka_api_gateway::{
     db::store::TopicRow,
@@ -171,7 +172,7 @@ struct Setup {
     publisher: Arc<FakePublisher>,
     id: u64,
     // Kept so the subscriber queue stays open
-    _rx: mpsc::Receiver<String>,
+    _rx: mpsc::Receiver<Utf8Bytes>,
 }
 
 // A connected subscriber over a policy with events (publish allowed) and jobs (publish not allowed)

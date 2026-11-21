@@ -3,7 +3,7 @@ use axum::{
     body::Bytes,
     extract::{
         State,
-        ws::{Message, WebSocket, WebSocketUpgrade},
+        ws::{Message, Utf8Bytes, WebSocket, WebSocketUpgrade},
     },
     http::HeaderMap,
     response::Response,
@@ -17,7 +17,8 @@ use crate::{
     state::AppState,
     ws::{
         CLOSE_AUTH_FAILED, CLOSE_GOING_AWAY, CLOSE_TRY_AGAIN_LATER, Exit, MAX_MESSAGE_SIZE,
-        auth_error_frame, authenticate, close, error_frame, frame,
+        authenticate, close,
+        frames::{Frame, auth_error_frame, error_frame},
         keepalive::{Beat, Keepalive, PING_INTERVAL},
     },
 };
@@ -147,10 +148,10 @@ async fn run_socket(
 async fn serve(
     socket: &mut WebSocket,
     session: &SubscriberSession,
-    outbound: &mut mpsc::Receiver<String>,
+    outbound: &mut mpsc::Receiver<Utf8Bytes>,
     mut shutdown: watch::Receiver<bool>,
 ) -> Exit {
-    let ready = frame(serde_json::json!({ "type": "ready" }));
+    let ready = Frame::Ready { message: None }.to_text();
     if socket.send(Message::Text(ready.into())).await.is_err() {
         return Exit::Gone;
     }
@@ -165,7 +166,7 @@ async fn serve(
         tokio::select! {
             queued = outbound.recv() => match queued {
                 Some(text) => {
-                    if socket.send(Message::Text(text.into())).await.is_err() {
+                    if socket.send(Message::Text(text)).await.is_err() {
                         return Exit::Gone;
                     }
                 }

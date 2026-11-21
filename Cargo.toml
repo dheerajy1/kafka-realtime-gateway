@@ -5,7 +5,16 @@ edition = "2024"
 publish = false
 
 [workspace]
-members = ["xtask"]
+members = ["crates/kafka-env", "xtask"]
+
+# Dependencies used by more than one crate, declared once here so their versions and features cannot drift apart
+# Each crate takes one with `workspace = true`
+[workspace.dependencies]
+kafka-env = { path = "crates/kafka-env" }
+bcrypt = "0.19"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1"
+validator = { version = "0.21", features = ["derive"] }
 
 [[bin]]
 name = "main"
@@ -18,13 +27,12 @@ tower = "0.5"
 tower-http = { version = "0.6", features = ["catch-panic", "cors"] }
 dioxus = { version = "0.7", default-features = false, features = ["macro", "html", "hooks", "signals"] }
 dioxus-ssr = "0.7"
-dotenvy = "0.15"
-envy = "0.4"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1"
-validator = { version = "0.21", features = ["derive"] }
+kafka-env = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+validator = { workspace = true }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
-bcrypt = "0.19"
+bcrypt = { workspace = true }
 jsonwebtoken = { version = "11", features = ["rust_crypto"] }
 uuid = { version = "1", features = ["v7"] }
 utoipa = "6"
@@ -35,7 +43,23 @@ sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio",
 async-trait = "0.1.92"
 getrandom = "0.4.3"
 kafkit-client = "0.1.9"
+subtle = "2"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
+# A real WebSocket client for the tests that connect to the router over a local socket
+tokio-tungstenite = "0.29"
+futures-util = "0.3"
+
+# Release build tuned for speed and a small memory footprint
+# panic stays "unwind" on purpose, CatchPanicLayer turns a handler panic into a 500 and needs unwinding
+[profile.release]
+# One codegen unit lets the compiler optimise across the whole crate
+codegen-units = 1
+
+# Fat LTO optimises across every crate in the build, smaller and faster code
+lto = "fat"
+
+# Removes symbol names from the binary, smaller file and faster cold start
+strip = "symbols"

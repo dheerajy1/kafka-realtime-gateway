@@ -7,8 +7,9 @@ use crate::kafka::health::KafkaHealthSummary;
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AppHealthData {
-    pub status: String,
-    pub version: String,
+    // Fixed texts, known when the program is compiled, so they are borrowed and never copied
+    pub status: &'static str,
+    pub version: &'static str,
     pub uptime_ms: u64,
     pub timestamp_utc: String,
 }

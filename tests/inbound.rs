@@ -103,3 +103,47 @@ fn payload_fields_win_over_fixed_fields() {
     assert_eq!(frame["type"], "custom");
     assert_eq!(frame["headers"], json!({}));
 }
+
+// A header name that repeats keeps its last value, so the object has no repeated names
+#[test]
+fn repeated_header_name_keeps_the_last_value() {
+    let payload: Map<String, Value> =
+        serde_json::from_value(json!({ "correlationId": CORRELATION_ID })).unwrap();
+    let headers = vec![
+        ("retry".to_string(), "1".to_string()),
+        ("source".to_string(), "crm".to_string()),
+        ("retry".to_string(), "2".to_string()),
+    ];
+
+    let text = event_frame("orders", 0, 1, &headers, payload);
+    let frame: Value = serde_json::from_str(&text).unwrap();
+
+    assert_eq!(frame["headers"], json!({ "retry": "2", "source": "crm" }));
+    assert_eq!(text.matches("\"retry\"").count(), 1);
+}
+
+// The largest offset stays exact because it is sent as text
+#[test]
+fn largest_offset_is_sent_as_text() {
+    let payload: Map<String, Value> =
+        serde_json::from_value(json!({ "correlationId": CORRELATION_ID })).unwrap();
+
+    let frame: Value =
+        serde_json::from_str(&event_frame("orders", 0, i64::MAX, &[], payload)).unwrap();
+
+    assert_eq!(frame["offset"], "9223372036854775807");
+}
+
+// A payload field named like a fixed field replaces it, the text holds the name only once
+#[test]
+fn fixed_field_replaced_by_the_payload_appears_once() {
+    let payload: Map<String, Value> =
+        serde_json::from_value(json!({ "correlationId": CORRELATION_ID, "topic": "other" }))
+            .unwrap();
+
+    let text = event_frame("orders", 0, 1, &[], payload);
+    let frame: Value = serde_json::from_str(&text).unwrap();
+
+    assert_eq!(frame["topic"], "other");
+    assert_eq!(text.matches("\"topic\"").count(), 1);
+}

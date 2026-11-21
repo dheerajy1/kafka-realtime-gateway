@@ -4,13 +4,13 @@ How to run the gateway as a Docker container. For local development see [dev-set
 
 ## 1. What runs where
 
-The gateway is one container, `kafka-api-gateway`, built from `docker/Dockerfile` (a Rust build stage and a `debian:bookworm-slim` runtime stage). It listens on all interfaces, port `8089`, and Compose publishes `8089:8089`. PostgreSQL and Kafka run outside the container, on the Docker host.
+The gateway is one container, `kafka-api-gateway`, built from `docker/Dockerfile` (a Rust build stage and a `debian:bookworm-slim` runtime stage). The process runs as the unprivileged system user `app` (uid 10001), not as root, and the server writes no files. It listens on all interfaces, port `8089`, and Compose publishes `8089:8089`. PostgreSQL and Kafka run outside the container, on the Docker host.
 
 `localhost` inside a container is the container itself, so the container reaches the host through `host.docker.internal`. Compose adds that name with `extra_hosts: host.docker.internal:host-gateway`.
 
 ## 2. Requirements
 
-- Docker with Compose.
+- Docker 23.0 or newer with Compose. The image build uses BuildKit cache mounts, and BuildKit is the default builder since Docker 23.0.
 - The Tailwind CSS CLI on `PATH`, because `cargo docker-build` compiles the stylesheet first.
 - PostgreSQL with the `kafka_api_gateway_db` database (see [dev-setup.md](dev-setup.md), section 3), reachable from the container.
 - A Kafka broker on port 9092 that advertises `host.docker.internal:9092` (see [dev-setup.md](dev-setup.md), section 4).
@@ -40,6 +40,8 @@ cargo docker-build
 ```bash
 cargo docker-up
 ```
+
+The build runs `cargo build --release --locked`, so it fails when `Cargo.lock` does not match the manifests. Commit a current `Cargo.lock` first. The first build is slow (fat LTO, one codegen unit, all dependencies compiled). Later builds reuse the cargo registry and the compiled dependencies from the BuildKit cache, so a code change rebuilds only the changed crates, and the final link is still slow. The cache lives on the build host and survives `cargo docker-rmi`.
 
 `cargo docker-up` starts the container in the background. `restart: unless-stopped` brings it back after a Docker or host restart, unless you stopped it by hand.
 
@@ -121,4 +123,4 @@ cargo build-prod
 cargo start
 ```
 
-Both read `.env.production`. On the host, `KAFKA_BROKERS` can stay `host.docker.internal:9092`, because the name resolves through `/etc/hosts`. Set `ONPREM_DB_SERVER` to a host-local address (`localhost`) instead of `host.docker.internal`.
+Both read `.env.production`. `cargo start` builds in release mode itself before it runs, so it never runs an old build. `cargo build-preview` and `cargo preview` do the same with `.env.preview`. On the host, `KAFKA_BROKERS` can stay `host.docker.internal:9092`, because the name resolves through `/etc/hosts`. Set `ONPREM_DB_SERVER` to a host-local address (`localhost`) instead of `host.docker.internal`.

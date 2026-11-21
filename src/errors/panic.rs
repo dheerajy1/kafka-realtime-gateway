@@ -6,14 +6,12 @@ use super::{api_error::ApiError, catalog::internal_server_error};
 
 // Turns a panic inside a handler into the global 500 error shape
 pub fn handle_panic(payload: Box<dyn Any + Send + 'static>) -> Response {
-    // Panic text is only logged, never sent to the client
-    let detail = if let Some(text) = payload.downcast_ref::<&str>() {
-        (*text).to_string()
-    } else if let Some(text) = payload.downcast_ref::<String>() {
-        text.clone()
-    } else {
-        "unknown panic payload".to_string()
-    };
+    // Panic text is only logged, never sent to the client, it is borrowed from the payload and not copied
+    let detail = payload
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("unknown panic payload");
 
     tracing::error!(target: "Http", "handler panicked: {detail}");
 

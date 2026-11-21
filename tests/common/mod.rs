@@ -7,7 +7,7 @@ use std::sync::{Arc, Once};
 use axum::{
     Router,
     body::Body,
-    http::{Request, Response},
+    http::{Request, Response, request::Builder},
 };
 use http_body_util::BodyExt;
 use kafka_api_gateway::{
@@ -159,34 +159,42 @@ pub fn auth_headers() -> [(&'static str, &'static str); 2] {
     ]
 }
 
-// Sends a request with the given method and headers through a fresh router
-async fn send(method: &str, uri: &str, headers: &[(&str, &str)]) -> Response<Body> {
-    let mut request = Request::builder().method(method).uri(uri);
-
+// Adds the headers and the body to a started request and sends it through the given router, the router is consumed so build one per request
+async fn send_to(
+    app: Router,
+    mut request: Builder,
+    headers: &[(&str, &str)],
+    body: Body,
+) -> Response<Body> {
     for (name, value) in headers {
         request = request.header(*name, *value);
     }
 
-    app()
-        .oneshot(request.body(Body::empty()).unwrap())
-        .await
-        .unwrap()
+    app.oneshot(request.body(body).unwrap()).await.unwrap()
 }
 
 // Sends a GET request with the given headers through a fresh router
 pub async fn get(uri: &str, headers: &[(&str, &str)]) -> Response<Body> {
-    send("GET", uri, headers).await
+    get_to(app(), uri, headers).await
 }
 
 // Sends a POST request with the given headers through a fresh router
 pub async fn post(uri: &str, headers: &[(&str, &str)]) -> Response<Body> {
-    send("POST", uri, headers).await
+    send_to(
+        app(),
+        Request::builder().method("POST").uri(uri),
+        headers,
+        Body::empty(),
+    )
+    .await
 }
 
 // Reads the whole response body as text
 pub async fn body_text(response: Response<Body>) -> String {
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
-    String::from_utf8(bytes.to_vec()).unwrap()
+
+    // Moves the buffer into the Vec when nothing else holds it, no second copy
+    String::from_utf8(Vec::from(bytes)).unwrap()
 }
 
 // Reads the whole response body as json
@@ -195,39 +203,15 @@ pub async fn body_json(response: Response<Body>) -> Value {
     serde_json::from_slice(&bytes).unwrap()
 }
 
-// Sends one request with a body through the given router, the router is consumed so build one per request
-pub async fn send_to(
-    app: Router,
-    method: &str,
-    uri: &str,
-    headers: &[(&str, &str)],
-    body: Body,
-) -> Response<Body> {
-    let mut request = Request::builder().method(method).uri(uri);
-
-    for (name, value) in headers {
-        request = request.header(*name, *value);
-    }
-
-    app.oneshot(request.body(body).unwrap()).await.unwrap()
-}
-
 // Sends a GET request through the given router
 pub async fn get_to(app: Router, uri: &str, headers: &[(&str, &str)]) -> Response<Body> {
-    send_to(app, "GET", uri, headers, Body::empty()).await
-}
-
-// Sends a POST request with a JSON body through the given router
-pub async fn post_json_to(
-    app: Router,
-    uri: &str,
-    headers: &[(&str, &str)],
-    json: &Value,
-) -> Response<Body> {
-    let mut all_headers = headers.to_vec();
-    all_headers.push(("content-type", "application/json"));
-
-    send_to(app, "POST", uri, &all_headers, Body::from(json.to_string())).await
+    send_to(
+        app,
+        Request::builder().method("GET").uri(uri),
+        headers,
+        Body::empty(),
+    )
+    .await
 }
 
 // Sends a POST request with a raw body and content type through the given router
@@ -238,10 +222,26 @@ pub async fn post_raw_to(
     content_type: &str,
     body: &str,
 ) -> Response<Body> {
-    let mut all_headers = headers.to_vec();
-    all_headers.push(("content-type", content_type));
+    send_to(
+        app,
+        Request::builder()
+            .method("POST")
+            .uri(uri)
+            .header("content-type", content_type),
+        headers,
+        Body::from(body.to_string()),
+    )
+    .await
+}
 
-    send_to(app, "POST", uri, &all_headers, Body::from(body.to_string())).await
+// Sends a POST request with a JSON body through the given router
+pub async fn post_json_to(
+    app: Router,
+    uri: &str,
+    headers: &[(&str, &str)],
+    json: &Value,
+) -> Response<Body> {
+    post_raw_to(app, uri, headers, "application/json", &json.to_string()).await
 }
 
 // Sends a browser style form POST through the given router

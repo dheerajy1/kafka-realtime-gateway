@@ -2,7 +2,8 @@ use dioxus::prelude::*;
 
 #[derive(Props, Clone, PartialEq)]
 pub struct LayoutProps {
-    pub title: String,
+    // Fixed text written in the source, so it is borrowed and never copied
+    pub title: &'static str,
     pub children: Element,
 }
 

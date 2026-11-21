@@ -18,7 +18,7 @@ const NAV_LINKS: [(&str, &str); 8] = [
 #[component]
 pub fn Home() -> Element {
     rsx! {
-        Layout { title: "Kafka realtime gateway, Axum + Dioxus SSR".to_string(),
+        Layout { title: "Kafka realtime gateway, Axum + Dioxus SSR",
             div { class: "max-w-(--width-container) w-full mx-auto p-4 md:p-8 leading-relaxed",
                 nav { class: "flex flex-wrap gap-4 mb-4 px-4 md:px-0",
                     for (href , label) in NAV_LINKS {

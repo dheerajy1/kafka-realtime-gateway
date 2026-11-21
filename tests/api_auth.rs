@@ -2,11 +2,13 @@ mod common;
 
 use std::{
     sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use axum::{Router, http::StatusCode, routing::get};
-use common::{auth_headers, body_json, fakes::FakeStore, get_to, post_json_to, post_raw_to};
+use common::{
+    TEST_CLIENT_ID, auth_headers, body_json, fakes::FakeStore, get_to, post_json_to, post_raw_to,
+};
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use kafka_api_gateway::{
     auth::jwt::{Claims, JWT_ISSUER, sign_token},
@@ -146,7 +148,7 @@ async fn login_returns_token_with_expected_claims() {
     let mut validation = Validation::new(Algorithm::HS256);
     validation.set_issuer(&[JWT_ISSUER]);
 
-    let claims = decode::<Claims>(
+    let claims = decode::<Claims<'static>>(
         token,
         &DecodingKey::from_secret(JWT_SECRET.as_bytes()),
         &validation,
@@ -211,7 +213,10 @@ async fn login_with_wrong_client_secret_returns_400() {
     let response = post_json_to(
         common::app_with(state),
         "/api/v1/login",
-        &[("x-client-id", "test-client"), ("x-client-secret", "wrong")],
+        &[
+            ("x-client-id", TEST_CLIENT_ID),
+            ("x-client-secret", "wrong"),
+        ],
         &json!({ "username": "apiuser", "password": API_PASSWORD }),
     )
     .await;
@@ -288,19 +293,18 @@ async fn login_database_failure_returns_500() {
 // A missing or non-Bearer Authorization header returns 401 MISSING_AUTHORIZATION_TOKEN
 #[tokio::test]
 async fn api_keys_without_bearer_token_returns_401() {
-    for authorization in [None, Some("Basic abc123")] {
+    let [client_id, client_secret] = auth_headers();
+    let without = [client_id, client_secret];
+    let basic = [client_id, client_secret, ("authorization", "Basic abc123")];
+    let cases: [&[(&str, &str)]; 2] = [&without, &basic];
+
+    for headers in cases {
         let (_, state) = store_and_state();
-
-        let mut headers = auth_headers().to_vec();
-
-        if let Some(value) = authorization {
-            headers.push(("authorization", value));
-        }
 
         let response = post_json_to(
             common::app_with(state),
             "/api/v1/api-keys",
-            &headers,
+            headers,
             &json!({ "apiKeyId": "my-service-key" }),
         )
         .await;
@@ -375,7 +379,7 @@ async fn api_keys_with_wrong_client_secret_returns_400() {
         common::app_with(state),
         "/api/v1/api-keys",
         &[
-            ("x-client-id", "test-client"),
+            ("x-client-id", TEST_CLIENT_ID),
             ("x-client-secret", "wrong"),
             ("authorization", &authorization),
         ],
@@ -443,9 +447,13 @@ async fn api_keys_create_returns_a_secret_that_works() {
     assert!(store.api_key_ids().contains(&"my-service-key".to_string()));
 
     // The stored hash belongs to the returned secret, so the key works on a protected route
-    let mut headers = auth_headers().to_vec();
-    headers.push(("x-api-key", "my-service-key"));
-    headers.push(("x-api-secret", secret.as_str()));
+    let [client_id, client_secret] = auth_headers();
+    let headers = [
+        client_id,
+        client_secret,
+        ("x-api-key", "my-service-key"),
+        ("x-api-secret", secret.as_str()),
+    ];
 
     let response = get_to(probe_app(state), "/probe", &headers).await;
 
@@ -472,12 +480,15 @@ async fn api_keys_duplicate_key_id_returns_409() {
 }
 
 // Headers of a request to the probe route with the given key and secret
-fn probe_headers<'a>(key: &'a str, secret: &'a str) -> Vec<(&'a str, &'a str)> {
-    let mut headers = auth_headers().to_vec();
-    headers.push(("x-api-key", key));
-    headers.push(("x-api-secret", secret));
+fn probe_headers<'a>(key: &'a str, secret: &'a str) -> [(&'a str, &'a str); 4] {
+    let [client_id, client_secret] = auth_headers();
 
-    headers
+    [
+        client_id,
+        client_secret,
+        ("x-api-key", key),
+        ("x-api-secret", secret),
+    ]
 }
 
 // A valid API key reaches the handler
@@ -498,17 +509,15 @@ async fn api_key_auth_accepts_a_valid_key() {
 // Missing key headers return 401 MISSING_API_KEY
 #[tokio::test]
 async fn api_key_auth_without_key_headers_returns_401() {
-    for headers in [
-        auth_headers().to_vec(),
-        vec![
-            ("x-client-id", "test-client"),
-            ("x-client-secret", "test-secret"),
-            ("x-api-key", "key-1"),
-        ],
-    ] {
+    let [client_id, client_secret] = auth_headers();
+    let only_client = [client_id, client_secret];
+    let with_key_id = [client_id, client_secret, ("x-api-key", "key-1")];
+    let cases: [&[(&str, &str)]; 2] = [&only_client, &with_key_id];
+
+    for headers in cases {
         let (_, state) = store_and_state();
 
-        let response = get_to(probe_app(state), "/probe", &headers).await;
+        let response = get_to(probe_app(state), "/probe", headers).await;
 
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
@@ -532,6 +541,28 @@ async fn api_key_auth_with_bad_key_or_secret_returns_401() {
 
         assert_eq!(body["code"], code_of(unauthorized::INVALID_API_KEY));
     }
+}
+
+// An unknown key still pays for one bcrypt check, so its answer is not faster than a real check (I74.1)
+// Only a lower bound is asserted, a bcrypt check at cost 12 never takes less than this, and a bound like this cannot be flaky
+#[tokio::test]
+async fn api_key_auth_with_unknown_key_takes_as_long_as_a_bcrypt_check() {
+    let (_, state) = store_and_state();
+
+    let started = Instant::now();
+    let response = get_to(
+        probe_app(state),
+        "/probe",
+        &probe_headers("unknown-key", "s3cret"),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert!(
+        started.elapsed() >= Duration::from_millis(50),
+        "the unknown key was answered in {:?}",
+        started.elapsed()
+    );
 }
 
 // Empty or too long key headers return 400 INVALID_HEADER_VALUES
@@ -576,7 +607,7 @@ async fn api_key_auth_checks_client_credentials_first() {
         probe_app(state),
         "/probe",
         &[
-            ("x-client-id", "test-client"),
+            ("x-client-id", TEST_CLIENT_ID),
             ("x-client-secret", "wrong"),
             ("x-api-key", "key-1"),
             ("x-api-secret", "s3cret"),

@@ -61,3 +61,20 @@ pub fn init() {
         .event_format(LineFormat)
         .init();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The timestamp has the IST offset and millisecond precision
+    #[test]
+    fn iso_now_ist_has_ist_offset_and_milliseconds() {
+        let now = iso_now_ist();
+
+        // Example shape, 2026-10-29T01:36:26.744+05:30
+        assert_eq!(now.len(), 29);
+        assert!(now.ends_with("+05:30"));
+        assert_eq!(now.as_bytes()[10], b'T');
+        assert_eq!(now.as_bytes()[19], b'.');
+    }
+}

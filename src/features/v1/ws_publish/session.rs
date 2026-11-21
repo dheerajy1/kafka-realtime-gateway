@@ -1,17 +1,16 @@
 use std::sync::Arc;
 
 use chrono::{SecondsFormat, Utc};
-use serde_json::json;
 use uuid::Uuid;
 
-use super::model::{ParseError, parse_publish_request};
+use super::model::{ParseError, PublishedEvent, parse_publish_request};
 use crate::{
     kafka::{
         publisher::{PublishRecord, Publisher},
         registry::TopicRegistry,
     },
     middleware::api_key::ApiKeyIdentity,
-    ws::{error_frame, frame},
+    ws::frames::{Frame, error_frame},
 };
 
 // The message logic of one ws-publish connection, it knows nothing about the socket so it can be tested without one
@@ -52,28 +51,34 @@ impl PublishSession {
                 self.identity.api_key_id, request.topic
             );
 
-            return frame(json!({
-                "type": "error",
-                "message": "Unauthorized topic",
-                "reason": "topic-not-allowed",
-            }));
+            return Frame::Rejected {
+                message: "Unauthorized topic",
+                reason: "topic-not-allowed",
+                request_id: None,
+                correlation_id: None,
+            }
+            .to_text();
         }
 
         // D15: the correlation id is a UUID v7, the bridge skips anything else
         let correlation_id = Uuid::now_v7().to_string();
 
-        let value = json!({
-            "correlationId": correlation_id,
-            "apiUserId": self.identity.api_user_id,
-            "jobName": request.job_name,
-            "timestamp": Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
-        });
+        // The event borrows the text it holds, so serde writes it once and nothing is cloned first
+        let timestamp = Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
+
+        let value = PublishedEvent {
+            correlation_id: &correlation_id,
+            api_user_id: self.identity.api_user_id,
+            job_name: &request.job_name,
+            timestamp: &timestamp,
+        }
+        .to_text();
 
         let record = PublishRecord {
             topic: request.topic.clone(),
             key: Some(self.identity.api_key_id.clone()),
             headers: Vec::new(),
-            value: value.to_string(),
+            value,
         };
 
         match self.publisher.publish(record).await {
@@ -85,11 +90,11 @@ impl PublishSession {
                 );
 
                 // This ack means published, not processed
-                frame(json!({
-                    "type": "ack",
-                    "topic": request.topic,
-                    "correlationId": correlation_id,
-                }))
+                Frame::Ack {
+                    topic: &request.topic,
+                    correlation_id: &correlation_id,
+                }
+                .to_text()
             }
             Err(error) => {
                 tracing::warn!(
@@ -99,11 +104,13 @@ impl PublishSession {
                 );
 
                 // D14: a Kafka failure gets its own error frame, not Malformed JSON
-                frame(json!({
-                    "type": "error",
-                    "message": "Kafka publish failed",
-                    "reason": error.error(),
-                }))
+                Frame::Rejected {
+                    message: "Kafka publish failed",
+                    reason: error.error(),
+                    request_id: None,
+                    correlation_id: None,
+                }
+                .to_text()
             }
         }
     }

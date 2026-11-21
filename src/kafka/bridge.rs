@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
+use axum::body::Bytes;
 use tokio::sync::{oneshot, watch};
 
 use super::{
@@ -30,7 +31,8 @@ pub struct InboundRecord {
     pub headers: Vec<(String, String)>,
 
     // The raw message value, None for a message without a value
-    pub value: Option<Vec<u8>>,
+    // It is the buffer the Kafka client read, moved here without a copy
+    pub value: Option<Bytes>,
 }
 
 // What the consumer loop has to do after one message was processed
@@ -159,7 +161,7 @@ impl Bridge {
         );
 
         if !flags.ack_required {
-            let report = self.subscribers.deliver(&record.topic, &frame);
+            let report = self.subscribers.deliver(&record.topic, frame);
             tracing::debug!(
                 target: "WsBridge",
                 "DELIVERED topic={} corr={correlation_id} delivered={}",
@@ -178,7 +180,7 @@ impl Bridge {
                 offset: record.offset,
             },
         );
-        self.subscribers.deliver(&record.topic, &frame);
+        self.subscribers.deliver(&record.topic, frame);
 
         self.wait_for_ack(record, &correlation_id, waiter).await
     }

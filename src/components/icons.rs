@@ -2,8 +2,9 @@ use dioxus::prelude::*;
 
 #[derive(Props, Clone, PartialEq)]
 pub struct IconProps {
-    #[props(default = String::new())]
-    pub class: String,
+    // Fixed text written in the source, so it is borrowed and never copied
+    #[props(default = "")]
+    pub class: &'static str,
 }
 
 // Green check inside a circle, used for healthy states

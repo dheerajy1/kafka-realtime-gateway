@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use crate::errors::api_error::ApiError;
 
 // The columns of an api_users row that the API login needs
-#[derive(Debug, Clone)]
+// No Debug or Clone because it holds a password hash
 pub struct ApiUserRecord {
     // Login name, becomes the JWT sub claim
     pub user_name: String,
@@ -16,7 +16,7 @@ pub struct ApiUserRecord {
 }
 
 // What fn_verify_api_key returns for a valid key
-#[derive(Debug, Clone)]
+// No Debug or Clone because it holds the hash of the key secret
 pub struct ApiKeyRecord {
     // The API key id that was verified
     pub api_key_id: String,

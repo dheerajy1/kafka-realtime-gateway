@@ -1,8 +1,15 @@
 pub mod errors;
 
-use axum::{Json, Router, routing::get};
+use std::sync::LazyLock;
+
+use axum::{
+    Router,
+    http::header,
+    response::{Html, IntoResponse},
+    routing::get,
+};
 use utoipa::OpenApi;
-use utoipa_scalar::{Scalar, Servable};
+use utoipa_scalar::Scalar;
 
 use self::errors::ErrorExamples;
 use crate::{
@@ -36,14 +43,36 @@ use crate::{
 )]
 pub struct ApiDoc;
 
-// GET /openapi/json returns the raw OpenAPI spec
-async fn spec() -> Json<utoipa::openapi::OpenApi> {
-    Json(ApiDoc::openapi())
+// The spec as JSON text, built on the first request and then reused for every request
+static SPEC_JSON: LazyLock<String> = LazyLock::new(|| {
+    // The spec is built from our own code, so failing to turn it into JSON is a bug
+    serde_json::to_string(&ApiDoc::openapi()).expect("the OpenAPI spec always serializes")
+});
+
+// GET /openapi/json returns the raw OpenAPI spec, the cached text is lent to the response
+async fn spec() -> impl IntoResponse {
+    (
+        [(header::CONTENT_TYPE, "application/json")],
+        SPEC_JSON.as_str(),
+    )
+}
+
+// The Scalar page with the spec inside, built on the first request and then reused for every request
+// Scalar's own axum route clones this whole text on every request, so the page is served from here instead
+static SCALAR_HTML: LazyLock<String> = LazyLock::new(|| {
+    Scalar::new(ApiDoc::openapi())
+        .title("Kafka Realtime Gateway API")
+        .to_html()
+});
+
+// GET /openapi serves the Scalar UI, the cached text is lent to the response
+async fn scalar() -> Html<&'static str> {
+    Html(SCALAR_HTML.as_str())
 }
 
 // Routes of the docs, GET /openapi serves the Scalar UI and GET /openapi/json the spec
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route("/openapi", get(scalar))
         .route("/openapi/json", get(spec))
-        .merge(Scalar::with_url("/openapi", ApiDoc::openapi()).title("Kafka Realtime Gateway API"))
 }

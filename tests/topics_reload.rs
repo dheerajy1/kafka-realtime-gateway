@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use axum::{body::Body, http::Response, http::StatusCode};
 use common::{
-    KafkaFakes, app_with, auth_headers, body_json,
+    KafkaFakes, TEST_CLIENT_ID, app_with, auth_headers, body_json,
     fakes::{FakeReloader, FakeStore},
     post_json_to, state_with_kafka,
 };
@@ -22,12 +22,15 @@ fn store() -> Arc<FakeStore> {
 }
 
 // Client credentials plus a valid API key and secret
-fn api_key_headers() -> Vec<(&'static str, &'static str)> {
-    let mut headers = auth_headers().to_vec();
-    headers.push(("x-api-key", "key-1"));
-    headers.push(("x-api-secret", "s3cret"));
+fn api_key_headers() -> [(&'static str, &'static str); 4] {
+    let [client_id, client_secret] = auth_headers();
 
-    headers
+    [
+        client_id,
+        client_secret,
+        ("x-api-key", "key-1"),
+        ("x-api-secret", "s3cret"),
+    ]
 }
 
 // Sends the reload request with the given headers
@@ -82,9 +85,13 @@ async fn missing_api_key_returns_401() {
 #[tokio::test]
 async fn wrong_api_secret_returns_401() {
     let fakes = KafkaFakes::new();
-    let mut headers = auth_headers().to_vec();
-    headers.push(("x-api-key", "key-1"));
-    headers.push(("x-api-secret", "wrong"));
+    let [client_id, client_secret] = auth_headers();
+    let headers = [
+        client_id,
+        client_secret,
+        ("x-api-key", "key-1"),
+        ("x-api-secret", "wrong"),
+    ];
 
     let response = reload(&fakes, &headers).await;
 
@@ -101,7 +108,7 @@ async fn wrong_api_secret_returns_401() {
 async fn wrong_client_secret_returns_400() {
     let fakes = KafkaFakes::new();
     let headers = [
-        ("x-client-id", "test-client"),
+        ("x-client-id", TEST_CLIENT_ID),
         ("x-client-secret", "not-the-secret"),
         ("x-api-key", "key-1"),
         ("x-api-secret", "s3cret"),

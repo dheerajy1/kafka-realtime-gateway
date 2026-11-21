@@ -10,6 +10,7 @@ use crate::{
     errors::{
         api_error::ApiError,
         catalog::{bad_request, unauthorized},
+        code::ErrorCode,
     },
     state::AppState,
 };
@@ -65,9 +66,21 @@ pub async fn check_api_key(
     }
 
     // Unknown, inactive or expired keys and database failures come back as errors here
-    let record = keys.verify_api_key(key).await?;
+    let record = match keys.verify_api_key(key).await {
+        Ok(record) => record,
+        Err(error) => {
+            // A refused key pays for one bcrypt check too, so its answer takes as long as a wrong secret and the time does not show which key ids exist
+            // Only a refusal does this, a database failure answers at once
+            if error.code() == ErrorCode::Unauthorized {
+                verify_password(secret.to_string(), None).await?;
+            }
 
-    if !verify_password(secret, &record.api_key_secret_hash).await? {
+            return Err(error);
+        }
+    };
+
+    // The secret is copied because the blocking thread needs its own text, the hash moves out of the record
+    if !verify_password(secret.to_string(), Some(record.api_key_secret_hash)).await? {
         return Err(ApiError::from_entry(unauthorized::INVALID_API_KEY));
     }
 

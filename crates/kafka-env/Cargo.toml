@@ -1,0 +1,10 @@
+[package]
+name = "kafka-env"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+envy = "0.4"
+serde = { workspace = true }
+validator = { workspace = true }

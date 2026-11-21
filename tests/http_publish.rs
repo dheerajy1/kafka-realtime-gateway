@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use axum::{body::Body, http::Response, http::StatusCode};
 use common::{
-    app_with, auth_headers, body_json,
+    TEST_CLIENT_ID, app_with, auth_headers, body_json,
     fakes::{FakePublisher, FakeStore},
     post_json_to, post_raw_to, state_with_publisher,
 };
@@ -34,12 +34,15 @@ fn store() -> FakeStore {
 }
 
 // Client credentials plus a valid API key and secret
-fn publish_headers() -> Vec<(&'static str, &'static str)> {
-    let mut headers = auth_headers().to_vec();
-    headers.push(("x-api-key", API_KEY));
-    headers.push(("x-api-secret", API_SECRET));
+fn publish_headers() -> [(&'static str, &'static str); 4] {
+    let [client_id, client_secret] = auth_headers();
 
-    headers
+    [
+        client_id,
+        client_secret,
+        ("x-api-key", API_KEY),
+        ("x-api-secret", API_SECRET),
+    ]
 }
 
 // A body that passes every rule
@@ -144,9 +147,13 @@ async fn missing_api_key_returns_401() {
 #[tokio::test]
 async fn wrong_api_secret_returns_401() {
     let publisher = Arc::new(FakePublisher::new());
-    let mut headers = auth_headers().to_vec();
-    headers.push(("x-api-key", API_KEY));
-    headers.push(("x-api-secret", "wrong-secret"));
+    let [client_id, client_secret] = auth_headers();
+    let headers = [
+        client_id,
+        client_secret,
+        ("x-api-key", API_KEY),
+        ("x-api-secret", "wrong-secret"),
+    ];
 
     let response = publish(&publisher, &headers, &valid_body()).await;
 
@@ -262,7 +269,7 @@ async fn broker_down_returns_502() {
 async fn wrong_client_secret_returns_400() {
     let publisher = Arc::new(FakePublisher::new());
     let headers = [
-        ("x-client-id", "test-client"),
+        ("x-client-id", TEST_CLIENT_ID),
         ("x-client-secret", "not-the-secret"),
         ("x-api-key", API_KEY),
         ("x-api-secret", API_SECRET),

@@ -12,10 +12,16 @@ use crate::{
 // Largest request body accepted, 10 MB
 const MAX_BODY_BYTES: usize = 10 * 1024 * 1024;
 
+// Lets browsers reuse the embedded files for one hour, they only change when the binary is replaced
+const STATIC_CACHE_CONTROL: &str = "public, max-age=3600";
+
 // Serves the precompiled Tailwind stylesheet embedded in the binary
 async fn global_css() -> impl IntoResponse {
     (
-        [(header::CONTENT_TYPE, "text/css; charset=utf-8")],
+        [
+            (header::CONTENT_TYPE, "text/css; charset=utf-8"),
+            (header::CACHE_CONTROL, STATIC_CACHE_CONTROL),
+        ],
         include_str!("../public/global.css"),
     )
 }
@@ -23,7 +29,10 @@ async fn global_css() -> impl IntoResponse {
 // Serves the logo image embedded in the binary
 async fn logo() -> impl IntoResponse {
     (
-        [(header::CONTENT_TYPE, "image/png")],
+        [
+            (header::CONTENT_TYPE, "image/png"),
+            (header::CACHE_CONTROL, STATIC_CACHE_CONTROL),
+        ],
         include_bytes!("../public/logo.png").as_slice(),
     )
 }
@@ -31,7 +40,10 @@ async fn logo() -> impl IntoResponse {
 // Serves the favicon embedded in the binary
 async fn favicon() -> impl IntoResponse {
     (
-        [(header::CONTENT_TYPE, "image/x-icon")],
+        [
+            (header::CONTENT_TYPE, "image/x-icon"),
+            (header::CACHE_CONTROL, STATIC_CACHE_CONTROL),
+        ],
         include_bytes!("../public/favicon.ico").as_slice(),
     )
 }

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use super::model::{ClientMessage, ParseError, PublishCommand, parse_client_message};
 use crate::{
@@ -9,7 +9,7 @@ use crate::{
         registry::TopicRegistry,
         subscribers::SubscriberRegistry,
     },
-    ws::{error_frame, frame},
+    ws::frames::{AsText, Frame, Issues, error_frame},
 };
 
 // The message logic of one subscriber connection, it knows nothing about the socket so it can be tested without one
@@ -64,16 +64,11 @@ impl SubscriberSession {
                     self.subscriber, self.id
                 );
 
-                let issues: Vec<Value> = issues
-                    .into_iter()
-                    .map(|issue| json!({ "message": issue }))
-                    .collect();
-
-                frame(json!({
-                    "type": "error",
-                    "message": "Invalid message format",
-                    "issues": issues,
-                }))
+                Frame::InvalidMessage {
+                    message: "Invalid message format",
+                    issues: Issues(&issues),
+                }
+                .to_text()
             }
         }
     }
@@ -90,7 +85,7 @@ impl SubscriberSession {
             self.subscriber, self.id
         );
 
-        frame(json!({ "type": "subscribed", "topic": topic }))
+        Frame::Subscribed { topic: &topic }.to_text()
     }
 
     fn unsubscribe(&self, topic: String) -> String {
@@ -104,7 +99,7 @@ impl SubscriberSession {
             self.subscriber, self.id
         );
 
-        frame(json!({ "type": "unsubscribed", "topic": topic }))
+        Frame::Unsubscribed { topic: &topic }.to_text()
     }
 
     // The subscriber says it finished a message, only the owner of the message may do that
@@ -117,7 +112,10 @@ impl SubscriberSession {
                     self.subscriber, self.id, message.topic, message.offset
                 );
 
-                frame(json!({ "type": "ack-received", "correlationId": correlation_id }))
+                Frame::AckReceived {
+                    correlation_id: &correlation_id,
+                }
+                .to_text()
             }
             Err(rejection) => {
                 tracing::warn!(
@@ -126,12 +124,13 @@ impl SubscriberSession {
                     self.subscriber, self.id, rejection.message()
                 );
 
-                frame(json!({
-                    "type": "error",
-                    "message": "ACK rejected",
-                    "reason": rejection.message(),
-                    "correlationId": correlation_id,
-                }))
+                Frame::Rejected {
+                    message: "ACK rejected",
+                    reason: rejection.message(),
+                    request_id: None,
+                    correlation_id: Some(&correlation_id),
+                }
+                .to_text()
             }
         }
     }
@@ -153,12 +152,13 @@ impl SubscriberSession {
                 self.subscriber, self.id
             );
 
-            return frame(json!({
-                "type": "error",
-                "message": "Unauthorized topic",
-                "reason": "topic-not-allowed",
-                "requestId": request_id,
-            }));
+            return Frame::Rejected {
+                message: "Unauthorized topic",
+                reason: "topic-not-allowed",
+                request_id: Some(&request_id),
+                correlation_id: None,
+            }
+            .to_text();
         }
 
         let record = PublishRecord {
@@ -176,13 +176,13 @@ impl SubscriberSession {
                     self.subscriber, self.id, receipt.partition, receipt.offset
                 );
 
-                frame(json!({
-                    "type": "published",
-                    "requestId": request_id,
-                    "topic": receipt.topic,
-                    "partition": receipt.partition,
-                    "offset": receipt.offset.to_string(),
-                }))
+                Frame::Published {
+                    request_id: &request_id,
+                    topic: &receipt.topic,
+                    partition: receipt.partition,
+                    offset: AsText(receipt.offset),
+                }
+                .to_text()
             }
             Err(error) => {
                 tracing::warn!(
@@ -191,12 +191,13 @@ impl SubscriberSession {
                     self.subscriber, self.id, error.error()
                 );
 
-                frame(json!({
-                    "type": "error",
-                    "message": "Kafka publish failed",
-                    "reason": error.error(),
-                    "requestId": request_id,
-                }))
+                Frame::Rejected {
+                    message: "Kafka publish failed",
+                    reason: error.error(),
+                    request_id: Some(&request_id),
+                    correlation_id: None,
+                }
+                .to_text()
             }
         }
     }

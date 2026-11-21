@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
+use axum::{body::Bytes, extract::ws::Utf8Bytes};
 use kafka_api_gateway::{
     db::store::TopicRow,
     kafka::{
@@ -56,7 +57,7 @@ fn setup(rows: Vec<TopicRow>) -> Setup {
 }
 
 // Connects a subscriber and subscribes it to a topic
-fn join_topic(setup: &Setup, key: &str, topic: &str) -> (u64, mpsc::Receiver<String>) {
+fn join_topic(setup: &Setup, key: &str, topic: &str) -> (u64, mpsc::Receiver<Utf8Bytes>) {
     let (id, rx) = setup.subscribers.register(key);
     setup.subscribers.subscribe(id, topic);
 
@@ -70,7 +71,7 @@ fn record(topic: &str, value: Option<&str>) -> InboundRecord {
         partition: 0,
         offset: 7,
         headers: vec![("source".to_string(), "crm".to_string())],
-        value: value.map(|text| text.as_bytes().to_vec()),
+        value: value.map(|text| Bytes::copy_from_slice(text.as_bytes())),
     }
 }
 

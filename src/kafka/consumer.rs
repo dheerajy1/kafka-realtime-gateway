@@ -377,7 +377,7 @@ fn to_inbound(record: ConsumerRecord) -> InboundRecord {
                     .map(|value| (header.key, String::from_utf8_lossy(&value).into_owned()))
             })
             .collect(),
-        value: record.value.map(|value| value.to_vec()),
+        value: record.value,
     }
 }
 

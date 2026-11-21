@@ -11,7 +11,7 @@ An HTTP and WebSocket gateway in front of Apache Kafka, written in Rust (axum). 
 | Database | PostgreSQL through `sqlx` |
 | Pages | Dioxus server-side rendering, Tailwind CSS |
 | API docs | OpenAPI with Scalar UI at `GET /openapi` (behind the portal gate) |
-| Tooling | cargo workspace with an `xtask` crate for the aliases below |
+| Tooling | cargo workspace: the gateway, `crates/kafka-env` (the env schema) and an `xtask` crate for the aliases below |
 
 ## Quick start
 
@@ -19,7 +19,7 @@ An HTTP and WebSocket gateway in front of Apache Kafka, written in Rust (axum). 
 2. Start Kafka and PostgreSQL.
 3. Run `cargo dev`. The gateway listens on `http://localhost:8089`.
 
-Full setup: [docs/dev-setup.md](docs/dev-setup.md). Production and Docker: [docs/prod-setup.md](docs/prod-setup.md). Build plan and decisions: [docs/build.md](docs/build.md).
+Full setup: [docs/dev-setup.md](docs/dev-setup.md). Production and Docker: [docs/prod-setup.md](docs/prod-setup.md). Build plan and decisions: [docs/build.md](docs/build.md). Coding rules: [docs/CODING-STANDARDS.md](docs/CODING-STANDARDS.md). Numbered improvements: [docs/rust-improvements.md](docs/rust-improvements.md).
 
 ## Scripts & Commands
 
@@ -30,11 +30,14 @@ All commands run from the repository root, `~/dev/vs-code/kafka-api-gateway-rust
 | Command | WD | Description |
 | --- | --- | --- |
 | `cargo dev` | `~/dev/vs-code/kafka-api-gateway-rust` | Loads `.env.development`, builds Tailwind CSS, runs the gateway in debug mode. |
-| `cargo start` | `~/dev/vs-code/kafka-api-gateway-rust` | Loads `.env.production`, builds Tailwind CSS, runs the gateway in release mode. |
+| `cargo start` | `~/dev/vs-code/kafka-api-gateway-rust` | Loads `.env.production`, builds Tailwind CSS, builds the gateway in release mode, then runs it. The release profile uses fat LTO, so a build after a code change takes longer than a debug build. |
+| `cargo preview` | `~/dev/vs-code/kafka-api-gateway-rust` | Loads `.env.preview`, builds Tailwind CSS, builds the gateway in release mode, then runs it. |
 | `cargo build-prod` | `~/dev/vs-code/kafka-api-gateway-rust` | Validates `.env.production`, builds Tailwind CSS, builds the release binary. |
+| `cargo build-preview` | `~/dev/vs-code/kafka-api-gateway-rust` | Validates `.env.preview`, builds Tailwind CSS, builds the release binary. |
 | `cargo css` | `~/dev/vs-code/kafka-api-gateway-rust` | Compiles `src/tailwind.css` into `public/global.css`. |
 | `cargo hash 'value'` | `~/dev/vs-code/kafka-api-gateway-rust` | Prints the bcrypt hash (cost 12) of the value. |
 | `cargo test-ws 'api-key' 'api-secret'` | `~/dev/vs-code/kafka-api-gateway-rust` | Runs the live WebSocket scenario against a running gateway and broker (manual check, not part of CI). |
+| `cargo verify` | `~/dev/vs-code/kafka-api-gateway-rust` | Runs `cargo fmt`, `cargo check`, `cargo clippy -- -D warnings` and `cargo test` in that order and stops at the first failure. |
 | `cargo test --workspace` | `~/dev/vs-code/kafka-api-gateway-rust` | Runs the automated tests (no database or broker needed). |
 
 ### Docker Operations
@@ -43,7 +46,7 @@ These aliases target the Compose file at `docker/docker-compose.yml`.
 
 | Command | WD | Underlying command | Description |
 | --- | --- | --- | --- |
-| `cargo docker-build` | `~/dev/vs-code/kafka-api-gateway-rust` | `cargo css`, then `docker compose -f docker/docker-compose.yml build` | Rebuilds the stylesheet, then builds the image. |
+| `cargo docker-build` | `~/dev/vs-code/kafka-api-gateway-rust` | `cargo css`, then `docker compose -f docker/docker-compose.yml build` | Rebuilds the stylesheet, then builds the image. Needs BuildKit (Docker 23.0 or newer). |
 | `cargo docker-up` | `~/dev/vs-code/kafka-api-gateway-rust` | `docker compose -f docker/docker-compose.yml up -d` | Creates and starts the container in detached mode. |
 | `cargo docker-down` | `~/dev/vs-code/kafka-api-gateway-rust` | `docker compose -f docker/docker-compose.yml down` | Stops and removes the container and network. |
 | `cargo docker-start` | `~/dev/vs-code/kafka-api-gateway-rust` | `docker compose -f docker/docker-compose.yml start` | Starts the stopped container. |

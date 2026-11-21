@@ -9,12 +9,12 @@ Status legend:
 - `[ASK]` needs a user decision first.
 - `[VERIFY]` a fact that was not proven yet. Prove it in the named phase before relying on it.
 
-Honesty note: nothing in this plan has been compiled or run. Claude does not install the Rust toolchain and does not run `cargo`. Everything marked as read or verified below was read from source files, not executed.
+Honesty note: phases 1 to 5 were built, tested and run live (D39 to D56). The improvement pass of 2026-11-21 (D57 to D68) was written in a sandbox with no network and no cargo registry, so it was not compiled where it was written. It was then checked on the owner's machine: `cargo verify` passed, and `cargo dev`, `cargo start`, `cargo build-prod`, `cargo docker-build` and `cargo docker-up` ran correctly. Anything in that pass marked as read or verified was read from source files, not executed.
 
 ## 0. Working rules (apply to every phase)
 
 1. One file at a time: `touch` the file, paste the code, wait for the user to say `success` or paste the error. Never chain steps.
-2. The user runs `cargo fmt`, `cargo check`, `cargo test` and `cargo build` and reports errors. Claude never runs them.
+2. The user runs `cargo verify` (fmt, check, clippy, test) and `cargo build` and reports errors. Claude's sandbox has no network, so it cannot run cargo against the real crates. It can run `rustfmt` and std-only checks, and it says plainly what it could not check.
 3. No extra CLI tools and no extra runtime dependencies beyond the crates listed in section 6. The Tailwind CLI is already installed on the user's machine.
 4. Code comments go on their own line above the code, never at the end of a line.
 5. When a phase adds 4 or more new files, deliver a zip plus a `changes.md` that lists every edit to existing files.
@@ -22,15 +22,17 @@ Honesty note: nothing in this plan has been compiled or run. Claude does not ins
 7. When a build or tooling term is used for the first time, explain it in plain words in the same message.
 8. If context is lost, say so immediately and ask for the files again. Do not guess.
 9. Ask one question at a time, with the exact answer format (`yes` or `no`, a value, or a command output).
+10. Follow `docs/CODING-STANDARDS.md` (S numbers) and record every improvement in `docs/rust-improvements.md` (I numbers). The numbers are shared with the other Rust projects, so a number is never reused for something else. A kafka-only item gets a sub-number, and an item that does not fit stays in place as skipped (D68).
 
 ## 1. Sources of truth
 
 | Source | What it is for |
 | --- | --- |
 | `kafka-api-gateway` (ElysiaJS, Bun, TypeScript) | The behavior to replicate. If this plan and the old code disagree, check section 3 first: a listed deviation wins, otherwise the old code wins. |
-| `kafka-api-gateway-rust` | The target repo. Legacy TypeScript is already removed and committed. No Rust code exists yet. |
+| `kafka-api-gateway-rust` | The target repo. The legacy TypeScript is removed and the Rust gateway is built (phases 1 to 5 are done). |
 | `kafka_api_gateway_db` | Schema, the three Postgres functions and seed data. Read `scripts-fun/*.sql` before writing any DB code. |
-| `recordlog-api` (Elysia) and `recordlog-api-rust` | The reference pair. The Rust rewrite of recordlog is the pattern to copy: workspace, xtask aliases, folder layout, env schema, response envelope, error catalog, health, Dioxus pages, tests. Use the tarball `recordlog-api-rust_tar_077b23.gz` (it has `src/openapi/` with utoipa 6 and Scalar). Older tarballs lack it. |
+| `recordlog-api` (Elysia) and `recordlog-api-rust` | The reference pair. The Rust rewrite of recordlog was the pattern for this repo: workspace, xtask aliases, folder layout, env schema, response envelope, error catalog, health, Dioxus pages, tests, OpenAPI with utoipa 6 and Scalar. |
+| `jobs-api-gateway-rust` | A second Rust project that shares the improvement and standard numbers with this repo (`docs/rust-improvements.md`, `docs/CODING-STANDARDS.md`). |
 | `record_log_db` | Reference database only. Not used by the gateway. |
 
 What the reference does NOT carry over: it targets Vercel (`vercel_runtime`, `VercelLayer`), Azure SQL (`tiberius`, `bb8`), an outbound `reqwest` client and a subscriber crate. The gateway is an on-prem long-running Docker process on PostgreSQL, so none of those apply.
@@ -106,7 +108,7 @@ Header limits: `x-client-id` max 44, `x-client-secret` max 100, `x-api-key` max 
 
 ### 2.5 CORS
 
-Exactly as the old gateway. Fixed origin `http://localhost:3000`. Origin suffixes `.trycloudflare.com`, `.devtunnels.ms`, `.vercel.app`, `.dheerajy1dev.dpdns.org`. Requests without an `Origin` header are allowed. Credentials on. Methods GET, POST, PUT, DELETE, PATCH, OPTIONS. Headers `Content-Type`, `Authorization`, `X-Client-Id`, `X-Client-Secret`.
+Exactly as the old gateway. Fixed origin `http://localhost:3000`. Origin suffixes `.trycloudflare.com`, `.devtunnels.ms`, `.vercel.app`, `.dheerajy1dev.dpdns.org`. Requests without an `Origin` header are allowed. Credentials on. Methods GET, POST, PUT, DELETE, PATCH, OPTIONS. Headers `Content-Type`, `Authorization`, `X-Client-Id`, `X-Client-Secret`, `X-Api-Key`, `X-Api-Secret` (the last two were added later, so this is no longer exactly the old list).
 
 ### 2.6 Auth and the portal
 
@@ -172,11 +174,11 @@ Max 5 connections and 120 s idle timeout per pool. The app never selects the `ka
 
 ### 2.12 Tooling, Docker, CI
 
-- `xtask` cargo aliases: `css`, `dev`, `start`, `build-prod`, `hash`, `docker-build`, `docker-up`, `docker-down`, `docker-start`, `docker-stop`, `docker-restart`, `docker-logs`, `docker-logs-clear`, `docker-rmi`, `docker-clean`. `hash` is `cargo hash 'value'`: bcrypt cost 12, prints the hash, replaces `bun run hash`.
-- Dockerfile: two stages, `rust:1-bookworm` builder and `debian:bookworm-slim` runtime with `ca-certificates`. Port, env and compose follow the old gateway, not recordlog. Compose: container `kafka-api-gateway`, image `kafka-api-gateway:latest`, `restart: unless-stopped`, `env_file: ../.env.production`, `8089:8089`, bridge network, `extra_hosts: host.docker.internal:host-gateway`. Drop `NODE_ENV`.
+- `xtask` cargo aliases: `css`, `dev`, `start`, `preview`, `build-prod`, `build-preview`, `hash`, `test-ws`, `verify`, `docker-build`, `docker-up`, `docker-down`, `docker-start`, `docker-stop`, `docker-restart`, `docker-logs`, `docker-logs-clear`, `docker-rmi`, `docker-clean`. `hash` is `cargo hash 'value'`: bcrypt cost 12, prints the hash, replaces `bun run hash`. `verify` runs `cargo fmt`, `cargo check --workspace --all-targets`, `cargo clippy --workspace --all-targets --locked -- -D warnings` and `cargo test --workspace` in that order and stops at the first failure. `start` and `preview` build in release mode before they run (D58).
+- Dockerfile: two stages, `rust:1-bookworm` builder and `debian:bookworm-slim` runtime with `ca-certificates`. Port, env and compose follow the old gateway, not recordlog. The build uses BuildKit cache mounts and `--locked`, and the runtime runs as the user `app` (D66). Compose: container `kafka-api-gateway`, image `kafka-api-gateway:latest`, `restart: unless-stopped`, `env_file: ../.env.production`, `8089:8089`, bridge network, `extra_hosts: host.docker.internal:host-gateway`. Drop `NODE_ENV`.
 - CI: `.github/workflows/test.yml` calls `dheerajy1/.github/.github/workflows/test-rust.yml@main`. Keep unchanged: `pr-check-template.yml`, `pr-checks.yml`, `labeler.yml`, `CODEOWNERS`, the PR template.
 - `release.yml`: semantic-release through `cycjimmy/semantic-release-action` (D46).
-- Write a proper new `README.md` and update `docs/dev-setup.md` and `docs/prod-setup.md` for the Rust version. The old README is stale.
+- `README.md`, `docs/dev-setup.md` and `docs/prod-setup.md` are written for the Rust version (D44).
 
 ## 3. Deviations from the old gateway
 
@@ -226,7 +228,7 @@ Max 5 connections and 120 s idle timeout per pool. The app never selects the `ka
 | D42 | Ten docker xtask commands: `docker-build` (runs `cargo css` first, then `build`), `docker-up` (`up -d`), `docker-down`, `docker-start`, `docker-stop`, `docker-restart`, `docker-logs` (`logs -f`), `docker-logs-clear` (`sudo truncate` of the container `LogPath`, Linux), `docker-rmi`, `docker-clean` (`down`, then `rmi`). | `[DONE]` |
 | D43 | CI: `.github/workflows/test.yml` calls `dheerajy1/.github/.github/workflows/test-rust.yml@main`. That shared workflow was changed to `--workspace --all-targets --locked` for check and clippy, and `--workspace --locked` for test and build, so CI matches the local checks. `cargo test-ws` needs a running gateway and broker, so it stays a manual pre-release check, documented in `docs/dev-setup.md`. | `[DONE]` |
 | D44 | Docs: `README.md` (new), `docs/dev-setup.md`, `docs/prod-setup.md`, and a separate `docs/websocket.md` for the WebSocket protocol (OpenAPI cannot describe it). | `[DONE]` |
-| D45 | `APP_ENV` is a required env variable with exactly two allowed values, `development` and `production` (`AppEnv` enum in `src/schemas/env.rs`, any other value stops the gateway at boot). For now it is only shown in the startup log line. Switching behavior by environment (for example CORS origins) is a later decision. | `[DONE]` |
+| D45 | `APP_ENV` is a required env variable with exactly three allowed values, `development`, `preview` and `production` (`AppEnv` enum in `crates/kafka-env/src/schema.rs` since D57, any other value stops the gateway at boot). For now it is only shown in the startup log line. Switching behavior by environment (for example CORS origins) is a later decision. | `[DONE]` |
 | D46 | Release: `.github/workflows/release.yml` runs on push to `main` with `cycjimmy/semantic-release-action@v6.0.0` and the plugins `@semantic-release/changelog`, `@semantic-release/git` and `@semantic-release-cargo/semantic-release-cargo` (`publish: false`, nothing goes to crates.io). It writes `CHANGELOG.md`, bumps `Cargo.toml` and `Cargo.lock`, commits as `github-actions[bot]`, creates the tag and the GitHub Release. No Bun and no `package.json`. `cargo-smart-release` was rejected: it is built around crates.io (discussion #144), and a fork would be extra upkeep. `release-plz` was also considered: it uses a release PR, not a direct push. | `[DONE]` |
 | D47 | Kafka health follows the DB health pattern: a `KafkaProbe` trait in `AppState` next to `db_probe`, a fake in `tests/common`, and a real implementation on `KafkaAdmin` from kafkit-client. The DB and Kafka probes of the unified check run concurrently. | `[DECIDED]` |
 | D48 | The unified `GET /api/v1/health` and the portal `/healthz` gain a small `kafka` block: `status`, `brokerCount`, `latencyMs` (the round trip of `describe_cluster`). It is always live, never cached. Kafka `DOWN` fails the API unified check with 503 `KAFKA_PROBE_FAILED` (new catalog entry). The portal `/healthz*` pages keep returning 200 with the status in the body. | `[DECIDED]` |
@@ -238,6 +240,18 @@ Max 5 connections and 120 s idle timeout per pool. The app never selects the `ka
 | D54 | Consumer reconnect (found by the live test on 2026-11-04): the kafkit consumer runtime treats "Broken pipe" as non-retriable and never reconnects, so after a broker restart the consumer stayed dead while the health said UP. After 3 failed polls in a row (`RECONNECT_AFTER_FAILURES`, about 9 s with the 3 s retry delay) the loop builds a new `KafkaConsumer` from the stored config, subscribes it to the same topics, clears the paused set and closes the old one in the background (3 s limit). Committed offsets stay in Kafka and unconfirmed messages are delivered again. A failed reconnect is retried every 3 s. The log lines are `CONSUMER_RECONNECTED` and `CONSUMER_RECONNECT_FAILED`, each error text is logged once. Verified live with `docker restart kafka`. | `[DONE]` |
 | D55 | The full Kafka health shows `consumer.stalled`: true while the consumer loop runs and its last good round is older than 30 s. The status stays UP, because the broker itself is fine. | `[DONE]` |
 | D56 | The default log filter is `info,kafkit_client=error`, because the Kafka client library repeats a warning many times a second while the broker is down. `RUST_LOG` still overrides it. | `[DONE]` |
+| D57 | Env schema crate: `crates/kafka-env` holds `EnvSchema`, `AppEnv`, `env()`, `init()`, `load()` and `from_pairs()`. `xtask` and the gateway both depend on it, so `xtask` no longer depends on the whole server. `src/config/env.rs` is one line, `pub use kafka_env::{EnvSchema as Env, env, init};`, and `src/schemas/env.rs` is deleted. The owner chose the crate name. The crate has 16 tests (12 in `tests/env.rs`, 4 unit tests). (I7, I78) | `[DECIDED]` |
+| D58 | `cargo start` and `cargo preview` build in release mode and then run, so they never run an old build. `cargo dev` builds in debug mode. `cargo preview` loads `.env.preview`. `cargo build-prod` and `cargo build-preview` only validate their env file (`.env.production`, `.env.preview`) and build in release mode. (I23) | `[DECIDED]` |
+| D59 | Dependencies used by more than one crate are declared once in the root `[workspace.dependencies]` (`kafka-env`, `bcrypt`, `serde`, `serde_json`, `validator`), and the crates take them with `workspace = true`. The root has no `[workspace.package]`, because `semantic-release-cargo` edits the version in the root `Cargo.toml` (D46). (I64) | `[DECIDED]` |
+| D60 | Release profile: `codegen-units = 1`, `lto = "fat"`, `strip = "symbols"`. `panic` stays `unwind`, because `CatchPanicLayer` turns a handler panic into a 500 (D13). Release builds (`cargo start`, `cargo preview`, `cargo build-prod`, `cargo build-preview`, the Docker build) are slower. The gain was not measured. (I55) | `[DECIDED]` |
+| D61 | Browsers may keep the static files (`/global.css`, `/logo.png`, `/favicon.ico`) for one hour (`Cache-Control: public, max-age=3600`, no `immutable`, because the names carry no hash) and the CORS preflight answer for one hour (`Access-Control-Max-Age: 3600`). `tests/cors.rs` is the first CORS test. The CORS `allow_headers` list also has `x-api-key` and `x-api-secret` (section 10, item 10). (I56, I57) | `[DECIDED]` |
+| D62 | Secrets are never printed or copied by accident. `EnvSchema` has a hand-written `Debug` that leaves the secrets out and no `Clone`. The client headers, the API user record and the two login types (`LoginRequest`, `LoginForm`) do not derive `Debug` or `Clone`. The client id and secret are compared in constant time (`subtle`) and both results are always computed. An env error names the variable and never its value, in the gateway and in `xtask`. (I24, I26, I28, I58, I72.1, I75, I78) | `[DECIDED]` |
+| D63 | A login does the same work for an unknown user as for a wrong password: one bcrypt check against a dummy hash. An API key that the store refuses (unknown, inactive or expired) also costs one bcrypt check before the same error as before. A database failure still answers at once. Answers are unchanged. There is no rate limiting. (I74, I74.1, the second one decided by the owner) | `[DECIDED]` |
+| D64 | WebSocket delivery copies as little as possible: the Kafka value moves into the inbound record as `Bytes`, the frame text is built once with borrowed headers, each frame is one `Utf8Bytes` that all subscribers of the topic share, and the socket frames are one borrowing `Frame<'a>` enum, so the key order inside a frame can change. `POST /api/v1/http-publish` keeps reading its value as a `serde_json::Value`, so the text in Kafka stays compact and key-sorted. The owner decided against forwarding it as a `RawValue`. (I18.1, I20.1, I21.1, I22.1, I65) | `[DECIDED]` |
+| D65 | Fixed output is built once: the home, about and login pages, the Scalar page and the OpenAPI JSON are `LazyLock` values, and the JWT header and validation rules are `LazyLock` statics. The JWT keys are still built per call, because the secret is a function argument. Pages with changing data (the health pages) are rendered per request. (I37, I59, I60, I63) | `[DECIDED]` |
+| D66 | Docker build: BuildKit cache mounts for the cargo registry and `target`, `--locked`, the binary copied out in the same step, and the runtime runs as the system user `app` (uid 10001, no login shell). `crates/` and `xtask/` are copied into the builder, because they are workspace members. The server writes no files, so the user needs no writable folder. The image was built with `cargo docker-build` and started with `cargo docker-up`, and it ran correctly. (I67) | `[DECIDED]` |
+| D67 | WebSocket tests over a real socket: `tests/ws_socket.rs` starts the router on `127.0.0.1:0` and connects with `tokio-tungstenite` 0.29 (dev-dependency, with `futures-util` 0.3). Both crates were already in `Cargo.lock`. The lock file was edited by hand to list them for the gateway package (and earlier for the new `kafka-env` package and the removed `dotenvy` dependency of the root package), so the first `cargo check` without `--locked` may rewrite it. (I73.1) | `[DECIDED]` |
+| D68 | `docs/CODING-STANDARDS.md` (S1 to S22 and S7.1) and `docs/rust-improvements.md` (I1 to I82 and the sub-numbers) use the same numbers as the other Rust projects. A kafka-only item gets a sub-number (I18.1, I20.1, I21.1, I22.1, I39.1, I72.1, I73.1, I74.1). An item that does not fit stays in place as "Skipped in kafka-api-gateway-rust", with the reason and a "Revisit when" line. Of the 89 numbered items of the other projects, 52 are applied and 37 are skipped. | `[DECIDED]` |
 
 ## 4. Behavior of the old gateway to replicate
 
@@ -312,9 +326,10 @@ Hard time limit: 8 s from the signal `[DECIDED]` (D36). A watchdog logs an error
 ## 5. Target layout
 
 ```
-Cargo.toml                 workspace: root crate kafka-api-gateway (bin main) + xtask
-.cargo/config.toml         aliases: css, dev, start, build-prod, hash, test-ws (docker * in Phase 4)
-xtask/src/                 main.rs (css, dev, start, build, hash, test-ws), ws_test.rs (live WebSocket scenario)
+Cargo.toml                 workspace: root crate kafka-api-gateway (bin main), crates/kafka-env, xtask; [workspace.dependencies]; [profile.release]
+.cargo/config.toml         aliases: css, dev, start, preview, build-prod, build-preview, hash, test-ws, verify, docker-*
+crates/kafka-env/          env schema crate: src/{lib,schema,env}.rs, tests/env.rs
+xtask/src/                 main.rs (css, dev, start, build, hash, test-ws, verify, docker-*), quiet.rs (quiet cargo runs), ws_test.rs (live WebSocket scenario)
 docker/                    Dockerfile, docker-compose.yml
 docs/                      build.md, dev-setup.md, prod-setup.md, websocket.md
 public/                    global.css, logo.png, favicon.ico (embedded at compile time)
@@ -323,32 +338,34 @@ src/
   lib.rs, app.rs           router(state), layers, CORS, limits, gate
   state.rs                 AppState (traits for DB and Kafka, KafkaDeps, shutdown watch, ws_drain)
   logging.rs               tracing setup, IST log lines
-  config/                  env load, fail-fast
-  schemas/                 env, response envelope, auth
+  config/                  env (re-exports kafka-env)
+  schemas/                 response envelope, auth
   errors/                  code, catalog, ApiError, fallback, panic catch
   db/                      error, pool, store (traits), postgres (PgStore)
   auth/                    jwt, password
   kafka/                   error, publisher, producer, registry, admin, sync, reloader,
                            inbound, subscribers, bridge, consumer
-  ws/                      mod (close codes), keepalive (30 s ping)
+  ws/                      mod (close codes), keepalive (30 s ping), frames (Frame<'a>, error frames)
   middleware/              no_auth, auth, api_key, server_gate, valid_json, cors
   features/v1/             health, auth, api_keys, http_publish, topics (reload),
                            ws_subscribe, ws_publish (each: model, handler, mod, service or session)
   pages/, components/      Dioxus pages and components, icons
   openapi/                 ApiDoc, error examples, Scalar router
   tailwind.css
-tests/                     common/{mod,fakes}.rs plus one file per area
+tests/                     common/{mod,fakes}.rs plus one file per area (cors, ws_socket, format, password and more)
 ```
 
 One `AppState` holds the users, api_keys, db_probe, topics, publisher, reloader and subscribers handles, the shutdown watch and the ws_drain sender. Anything that touches the DB or Kafka sits behind a small trait, so `cargo test` runs against in-memory fakes (`KafkaFakes`, `state_with_kafka` in `tests/common`) and needs no database and no broker `[DECIDED]` (D27).
 
 ## 6. Dependencies
 
-Root crate: `axum` 0.8 (feature `ws`), `tokio` (full), `tower` 0.5, `tower-http` 0.6 (`catch-panic`, `cors`), `dioxus` 0.7 and `dioxus-ssr` 0.7, `dotenvy`, `envy`, `serde`, `serde_json`, `validator` 0.21, `chrono` (clock), `bcrypt` 0.19, `jsonwebtoken` 11 (`rust_crypto`), `uuid` (v7), `utoipa` 6, `utoipa-scalar` 0.4 (axum), `tracing`, `tracing-subscriber` (env-filter), `sqlx` 0.9 (`default-features = false`, `runtime-tokio`, `postgres`), `async-trait`, `getrandom`, `kafkit-client` 0.1.9.
+Root crate: `axum` 0.8 (feature `ws`), `tokio` (full), `tower` 0.5, `tower-http` 0.6 (`catch-panic`, `cors`), `dioxus` 0.7 and `dioxus-ssr` 0.7, `dotenvy`, `envy`, `serde`, `serde_json`, `validator` 0.21, `chrono` (clock), `bcrypt` 0.19, `jsonwebtoken` 11 (`rust_crypto`), `uuid` (v7), `utoipa` 6, `utoipa-scalar` 0.4 (axum), `tracing`, `tracing-subscriber` (env-filter), `sqlx` 0.9 (`default-features = false`, `runtime-tokio`, `postgres`), `async-trait`, `getrandom`, `kafkit-client` 0.1.9, `subtle` 2 (constant-time compare, D62), `kafka-env` (path, D57). `serde`, `serde_json`, `validator` and `bcrypt` come from `[workspace.dependencies]` (D59). `dotenvy` is not a dependency of the root crate any more (I25).
 
-Dev: `tower` (util), `http-body-util`.
+Dev: `tower` (util), `http-body-util`, `tokio-tungstenite` 0.29 and `futures-util` 0.3 (real-socket tests, D67).
 
-`xtask`: `kafka-api-gateway` (path), `dotenvy`, `bcrypt`, `tungstenite` 0.29, `serde_json`.
+`crates/kafka-env`: `envy` 0.4, `serde`, `validator`.
+
+`xtask`: `kafka-env`, `dotenvy`, `bcrypt`, `tungstenite` 0.29, `serde_json`. It no longer depends on `kafka-api-gateway`.
 
 Removed from the reference: `vercel_runtime`, `reqwest`, `tiberius`, `bb8`, `bb8-tiberius`.
 
@@ -356,7 +373,7 @@ Deferred crates: `sqlx` features `migrate` and `macros` (section 9, item 1a).
 
 ## 7. Phases
 
-### Phase 1: Scaffold `[PROPOSED order]`
+### Phase 1: Scaffold `[DONE]`
 
 Goal: a running server with pages, health, errors, docs and tooling. No DB, no Kafka.
 - Workspace, `.cargo/config.toml` aliases, `xtask` (`css`, `dev`, `start`, `build-prod`, `hash`; the docker commands can wait for Phase 4).
@@ -466,6 +483,10 @@ Broker side (done by the user, not by the gateway): to carry messages above 1 MB
 4. The seed files in `kafka_api_gateway_db/data` hold plaintext secrets and passwords. Keep them out of any public repo.
 5. Log in over plain HTTP on a non-localhost address will not keep the `Secure` portal cookie (2.6).
 6. The OpenAPI `info` (title and version) should match the old gateway's OpenAPI config. Read it from the old `src/index.ts` when writing `openapi/mod.rs`. WebSocket routes cannot appear in OpenAPI.
+7. `Cargo.lock` was edited by hand in the improvement pass (the new `kafka-env` package, the removed `dotenvy` dependency of the root crate, and the dev-dependencies `futures-util` and `tokio-tungstenite`), because the sandbox had no registry. The first `cargo check` without `--locked` may rewrite it. Commit the result. `cargo verify` runs `check` without `--locked` for this reason, and clippy and the Docker build with `--locked`.
+8. `[DONE]` The improvement pass of 2026-11-21 (D57 to D68) was never compiled where it was written, and `cargo verify` then passed on the owner's machine. Points that were most likely to need a fix, all of which compiled: Dioxus `#[props(into)]` with `Cow`, serde `rename_all_fields`, utoipa with `Cow` fields, `Scalar::new(..).title(..).to_html()`, the `validator` derive on a struct with a lifetime, and the `Utf8Bytes` conversions.
+9. `[DONE]` The Docker image was built after the Dockerfile change (D66) with `cargo docker-build`, and `cargo docker-up` ran it correctly.
+10. `[DONE]` The CORS `allow_headers` list now has `content-type`, `authorization`, `x-client-id`, `x-client-secret`, `x-api-key` and `x-api-secret`, so a browser that calls the API key routes passes its preflight.
 
 ## 11. Recommended order
 

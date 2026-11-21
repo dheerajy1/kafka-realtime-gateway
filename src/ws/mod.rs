@@ -1,9 +1,3 @@
-use axum::{
-    extract::ws::{CloseFrame, Message, WebSocket},
-    http::HeaderMap,
-};
-use serde_json::{Value, json};
-
 use crate::{
     errors::api_error::ApiError,
     middleware::{
@@ -12,7 +6,12 @@ use crate::{
     },
     state::AppState,
 };
+use axum::{
+    extract::ws::{CloseFrame, Message, WebSocket},
+    http::HeaderMap,
+};
 
+pub mod frames;
 pub mod keepalive;
 
 // Close code for a connection that failed authentication, same as the old gateway
@@ -35,29 +34,6 @@ pub async fn authenticate(
     check_client_credentials(headers)?;
 
     check_api_key(state.api_keys.as_ref(), headers).await
-}
-
-// The error frame for a failed authentication, the fields of the HTTP error shape plus the type
-pub fn auth_error_frame(error: &ApiError) -> String {
-    json!({
-        "type": "error",
-        "success": false,
-        "statusCode": error.code().status_code(),
-        "code": error.code().as_str(),
-        "message": error.message(),
-        "error": error.error(),
-    })
-    .to_string()
-}
-
-// A plain error frame with a message
-pub fn error_frame(message: &str) -> String {
-    json!({ "type": "error", "message": message }).to_string()
-}
-
-// A frame made of the given fields
-pub fn frame(fields: Value) -> String {
-    fields.to_string()
 }
 
 // How a WebSocket connection ended

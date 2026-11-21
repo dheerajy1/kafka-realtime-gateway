@@ -7,10 +7,10 @@ How to run the gateway on your machine. For Docker and production see [prod-setu
 | Tool | Notes |
 | --- | --- |
 | Rust (stable) | The crate uses edition 2024. Install with `rustup`. |
-| Tailwind CSS standalone CLI | Must be on `PATH` as `tailwindcss`. `cargo dev`, `cargo start`, `cargo build-prod` and `cargo docker-build` run it. |
+| Tailwind CSS standalone CLI | Must be on `PATH` as `tailwindcss`. `cargo dev`, `cargo start`, `cargo preview`, `cargo build-prod`, `cargo build-preview` and `cargo docker-build` run it. |
 | PostgreSQL 18 | The scripts use `uuidv7()`. |
 | Apache Kafka 4.1 | Single node (KRaft). Running it with Docker is the easiest way. |
-| Docker | Needed for Kafka (optional) and for the gateway image. |
+| Docker | Needed for Kafka (optional) and for the gateway image. The image build needs BuildKit, which is the default builder since Docker 23.0. |
 
 ## 2. Environment files
 
@@ -18,6 +18,7 @@ How to run the gateway on your machine. For Docker and production see [prod-setu
 | --- | --- | --- |
 | `.env.example` | Template with every variable | yes |
 | `.env.development` | `cargo dev`, `cargo test-ws` | no |
+| `.env.preview` | `cargo preview`, `cargo build-preview` | no |
 | `.env.production` | `cargo start`, `cargo build-prod`, Docker Compose | no |
 
 Create the development file:
@@ -31,7 +32,7 @@ Every variable below is required. A missing or invalid value stops the gateway a
 | Variable | Rule | Meaning |
 | --- | --- | --- |
 | `APP_PORT` | positive integer | Port the gateway listens on (all interfaces). |
-| `APP_ENV` | `development` or `production` | Runtime environment. Any other value stops the gateway at boot. It is shown in the startup log line. |
+| `APP_ENV` | `development`, `preview` or `production` | Runtime environment. Any other value stops the gateway at boot. It is shown in the startup log line. |
 | `APP_NAME` | 1 to 50 chars | Application name. |
 | `JWT_SECRET` | 1 to 50 chars | Secret used to sign JWTs. |
 | `CLIENT_ID`, `CLIENT_SECRET` | 1 to 50 chars each | Client credentials checked by the server gate. |
@@ -68,7 +69,7 @@ The gateway reaches the broker as `host.docker.internal:9092`, both on the host 
 | The gateway in Docker | Compose `extra_hosts: host.docker.internal:host-gateway` |
 | Tools inside the Kafka container | the same `extra_hosts` entry in the Kafka Compose file |
 
-Set `KAFKA_BROKERS=host.docker.internal:9092` in `.env.development` and `.env.production`.
+Set `KAFKA_BROKERS=host.docker.internal:9092` in `.env.development`, `.env.preview` and `.env.production`.
 
 Settings for the Kafka container (Compose):
 
@@ -99,6 +100,8 @@ cargo dev
 
 The gateway listens on `http://localhost:<APP_PORT>`. Stop it with Ctrl+C: it closes WebSocket connections with code 1001 and exits.
 
+`cargo dev` builds in debug mode. `cargo start` loads `.env.production` and builds in release mode before it runs, so it never runs an old build. `cargo preview` does the same with `.env.preview`. `cargo build-preview` loads `.env.preview` and builds in release mode without running. The release profile uses fat LTO and one codegen unit, so the first release build and every build after a code change take noticeably longer than a debug build (not measured here, compare it once on your machine). `cargo build-prod` only builds.
+
 The OpenAPI reference is at `/openapi` (Scalar UI) and `/openapi/json`. It describes the HTTP endpoints only. The WebSocket endpoints are in [websocket.md](websocket.md).
 
 Kafka health: `/healthz` and `/api/v1/health` show a small Kafka block, and `/healthz/kafka` (portal) and `/api/v1/health/kafka` (API) show the full result. See [prod-setup.md](prod-setup.md), section 7.
@@ -108,6 +111,14 @@ The Kafka client library repeats warnings many times a second while the broker i
 ## 6. Checks
 
 Run these before every commit, in this order. CI runs the same checks.
+
+### 6.0 verify (all checks in one command)
+
+```bash
+cargo verify
+```
+
+`cargo verify` runs `cargo fmt`, `cargo check --workspace --all-targets`, `cargo clippy --workspace --all-targets --locked -- -D warnings` and `cargo test --workspace` in that order, shows only the lines that matter and stops at the first failing step. The check step does not use `--locked`, so it may rewrite `Cargo.lock` when the file is out of date. Commit that change. The sections below run the same steps one by one.
 
 ### 6.1 format
 
@@ -167,7 +178,7 @@ cargo fmt && cargo check --workspace --all-targets && cargo clippy --workspace -
 cargo fmt && cargo check --workspace --all-targets 2>&1 | grep -Ev '^( *Compiling| *Checking [^ ]+ v[^ ]+$)' && cargo clippy --workspace --all-targets --locked -- -D warnings && cargo test --workspace 2>&1 | grep -P '^(?!.*SIGTERM).*(Finished|Running|test result|FAILED|panicked|error|Doc-tests)'
 ```
 
-The automated tests use in-memory fakes. They need no database and no broker. Tests live in the `tests/` folder.
+The automated tests use in-memory fakes. They need no database and no broker. Tests live in the `tests/` folder. `tests/ws_socket.rs` starts the router on `127.0.0.1` with a free port and connects to it with a real WebSocket client, so it needs the loopback interface but no outside network. The env schema has its own tests in `crates/kafka-env/tests/env.rs`.
 
 ## 7. Live WebSocket test
 

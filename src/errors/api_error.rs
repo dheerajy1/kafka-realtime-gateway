@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{borrow::Cow, fmt};
 
 use axum::{
     Json,
@@ -12,8 +12,10 @@ use crate::schemas::response::ErrorResponse;
 #[derive(Debug, Clone)]
 pub struct ApiError {
     code: ErrorCode,
-    message: String,
-    error: String,
+
+    // Borrowed for the fixed catalogue text and owned for a text built at run time
+    message: Cow<'static, str>,
+    error: Cow<'static, str>,
 }
 
 impl ApiError {
@@ -21,16 +23,17 @@ impl ApiError {
     pub fn from_entry(entry: CatalogEntry) -> Self {
         Self {
             code: entry.code,
-            message: entry.message.to_string(),
-            error: entry.error.to_string(),
+            message: Cow::Borrowed(entry.message),
+            error: Cow::Borrowed(entry.error),
         }
     }
 
     // Builds the error from a code with a custom error text, the message comes from the code
-    pub fn new(code: ErrorCode, error: impl Into<String>) -> Self {
+    // A fixed text is borrowed and a text built at run time is moved in, nothing is copied either way
+    pub fn new(code: ErrorCode, error: impl Into<Cow<'static, str>>) -> Self {
         Self {
             code,
-            message: code.message().to_string(),
+            message: Cow::Borrowed(code.message()),
             error: error.into(),
         }
     }
@@ -45,6 +48,11 @@ impl ApiError {
 
     pub fn error(&self) -> &str {
         &self.error
+    }
+
+    // Gives the message away, used where the text moves into a page
+    pub fn into_message(self) -> Cow<'static, str> {
+        self.message
     }
 }
 

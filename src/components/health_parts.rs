@@ -1,3 +1,6 @@
+use std::borrow::Cow;
+use std::fmt::{self, Write};
+
 use dioxus::prelude::*;
 
 use crate::components::icons::{AlertTriangle, CheckCircle, XCircle};
@@ -6,7 +9,9 @@ use crate::kafka::health::KafkaStatus;
 
 #[derive(Props, Clone, PartialEq)]
 pub struct RowProps {
-    pub label: String,
+    // Borrowed for a fixed label written in the source, owned for a label built at run time such as a broker id
+    #[props(into)]
+    pub label: Cow<'static, str>,
     pub children: Element,
 }
 
@@ -85,25 +90,62 @@ pub fn KafkaStatusValue(props: KafkaStatusProps) -> Element {
     }
 }
 
-// Formats a number with thousands separators, for example 12345 becomes 12,345
-pub fn format_number(value: u64) -> String {
-    let digits = value.to_string();
-    let mut out = String::new();
-    for (i, ch) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            out.push(',');
+// A number that prints with thousands separators, for example 12345 prints as 12,345
+struct Grouped(u64);
+
+impl fmt::Display for Grouped {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // A u64 has at most 20 digits, they are kept on the stack, last digit first
+        let mut digits = [0u8; 20];
+        let mut count = 0;
+        let mut rest = self.0;
+
+        loop {
+            // The rest of a division by 10 is below 10, so it always fits in a u8
+            digits[count] = b'0' + (rest % 10) as u8;
+            rest /= 10;
+            count += 1;
+
+            if rest == 0 {
+                break;
+            }
         }
-        out.push(ch);
+
+        // Writes from the first digit to the last, straight into the page
+        for (index, digit) in digits[..count].iter().enumerate().rev() {
+            f.write_char(char::from(*digit))?;
+
+            // A comma goes after every digit that leaves a multiple of three digits behind it
+            if index > 0 && index % 3 == 0 {
+                f.write_char(',')?;
+            }
+        }
+
+        Ok(())
     }
-    out
+}
+
+// An optional latency that prints as the number of milliseconds, or a dash when it is missing
+struct Latency(Option<u64>);
+
+impl fmt::Display for Latency {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            Some(ms) => write!(f, "{ms}"),
+            None => f.write_str("—"),
+        }
+    }
+}
+
+// Formats a number with thousands separators, for example 12345 becomes 12,345
+// It returns a value that prints itself, so no String is built before it is written into the page
+pub fn format_number(value: u64) -> impl fmt::Display {
+    Grouped(value)
 }
 
 // Formats the optional latency, using a dash when it is missing
-pub fn format_latency(value: Option<u64>) -> String {
-    match value {
-        Some(ms) => ms.to_string(),
-        None => "—".to_string(),
-    }
+pub fn format_latency(value: Option<u64>) -> impl fmt::Display {
+    Latency(value)
 }
 
 // Formats a size in bytes with a binary unit, for example 1536 becomes 1.5 KiB

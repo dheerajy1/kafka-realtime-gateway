@@ -4,16 +4,16 @@ use crate::components::layout::Layout;
 
 #[derive(Props, Clone, PartialEq)]
 pub struct AboutProps {
-    pub title: String,
-    pub heading: String,
-    pub description: String,
+    pub title: &'static str,
+    pub heading: &'static str,
+    pub description: &'static str,
 }
 
 // About page rendered inside the shared Layout
 #[component]
 pub fn About(props: AboutProps) -> Element {
     rsx! {
-        Layout { title: props.title.clone(),
+        Layout { title: props.title,
             div { class: "mx-auto max-w-(--width-about) mt-10 px-4 md:px-0",
                 h1 { class: "text-2xl md:text-3xl font-bold mb-4 tracking-wider text-text-primary",
                     "{props.heading}"
